@@ -5,8 +5,8 @@ import { COLORS } from '@/lib/theme'
 
 /**
  * Logo de Safety Services.
- * Busca el archivo real en /public/logo.jpg. Si todavía no está, muestra un fallback.
- * Para usar el logo real: guardá la imagen v6 como  public/logo.jpg
+ * Busca el archivo real en /public/logo.png. Si todavía no está, muestra un fallback.
+ * Para usar el logo real: guardá la imagen v6 como  public/logo.png
  */
 export default function Logo({ size = 44 }: { size?: number }) {
   const [err, setErr] = useState(false)
@@ -24,7 +24,7 @@ export default function Logo({ size = 44 }: { size?: number }) {
 
   // eslint-disable-next-line @next/next/no-img-element
   return (
-    <img src="/logo.jpg" alt="Safety Services" width={size} height={size}
+    <img src="/logo.png" alt="Safety Services" width={size} height={size}
       style={{ objectFit: 'contain', flexShrink: 0 }} onError={() => setErr(true)} />
   )
 }

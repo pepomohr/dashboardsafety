@@ -50,7 +50,7 @@ Rutas:
 ## ⏳ Pendiente / para revisar juntos
 - **Cuerpo anatómico (✅ resuelto)**: se reemplazó el dibujo a mano por un cuerpo realista (manos, pies, cabeza, frente+espalda, izq/der) usando los datos SVG de `react-native-body-highlighter` (MIT) renderizados en web con `components/BodyMap2.tsx`. *Detalle a confirmar mirándolo: que la izquierda/derecha no esté espejada.*
 - **Supabase**: base de datos real, auth, RLS por empresa (charlado: el plan gratis alcanza de sobra para esto).
-- **Logos reales**: dejar `public/logo.jpg` (Safety) y `public/empresas/<slug>.png` (cada empresa) y `public/firma.png` (firma del Ing. Klopp). Mientras tanto van monogramas/firma tipográfica.
+- **Logos reales**: dejar `public/logo.png` (Safety) y `public/empresas/<slug>.png` (cada empresa) y `public/firma.png` (firma del Ing. Klopp). Mientras tanto van monogramas/firma tipográfica.
 - **Notificaciones push reales** (requieren backend + claves VAPID) — el service worker ya tiene el handler `push`.
 - Punto del PDF "índice de siniestralidad" que no quedó claro — confirmar con el Colo.
 

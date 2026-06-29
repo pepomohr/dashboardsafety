@@ -52,7 +52,7 @@ export default function InformeReporte({
       <div className="flex items-start justify-between pb-4 mb-5" style={{ borderBottom: `3px solid ${COLORS.green}` }}>
         <div className="flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.jpg" alt="Safety Services" style={{ width: 60, height: 60, objectFit: 'contain' }} />
+          <img src="/logo.png" alt="Safety Services" style={{ width: 60, height: 60, objectFit: 'contain' }} />
           <div>
             <p className="font-display text-xl font-extrabold leading-none">
               <span style={{ color: COLORS.green }}>Safety</span> <span style={{ color: COLORS.gray }}>Services</span>

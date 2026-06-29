@@ -5,7 +5,7 @@ export default function Home() {
     <main className="min-h-screen flex flex-col items-center justify-center gap-6 p-8" style={{ backgroundColor: '#F4F5F3' }}>
       <div className="flex items-center gap-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo.jpg" alt="Safety Services" width={84} height={84} style={{ width: 84, height: 84, objectFit: 'contain' }} />
+        <img src="/logo.png" alt="Safety Services" width={84} height={84} style={{ width: 84, height: 84, objectFit: 'contain' }} />
         <div>
           <p className="font-display text-3xl font-extrabold leading-none"><span style={{ color: '#6FB63F' }}>Safety</span> <span style={{ color: '#7A7A7A' }}>Services</span></p>
           <p className="text-sm mt-1.5" style={{ color: '#7A7A7A' }}>Tablero de gestión de Higiene y Seguridad</p>
