@@ -1,0 +1,525 @@
+'use client'
+
+import { useState } from 'react'
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  AreaChart, Area, CartesianGrid, Legend,
+} from 'recharts'
+import { COLORS, statusStyle } from '@/lib/theme'
+import { documents, DocItem } from '@/lib/mockData'
+import {
+  empresas as seedEmpresas, Empresa,
+  empresaDocs, empresaAccidentesPorMes, empresaAccidentesPorArea, empresaPartes, empresaIndices,
+} from '@/lib/empresas'
+import Card from '@/components/Card'
+import Gauge from '@/components/Gauge'
+import BodyMap2 from '@/components/BodyMap2'
+import EmpresaCard from '@/components/EmpresaCard'
+import EmpresaLogo from '@/components/EmpresaLogo'
+import CargaAccidentes from '@/components/CargaAccidentes'
+import InformeReporte from '@/components/InformeReporte'
+import Sidebar, { NavItem } from '@/components/Sidebar'
+import Logo from '@/components/Logo'
+import DemoSwitcher from '@/components/DemoSwitcher'
+
+const COLOR_SWATCHES = ['#E2001A', '#1E9BD7', '#F57C00', '#2E7D32', '#7E57C2', '#EC407A', '#00897B', '#3D3D3D']
+const DOC_TYPES = documents.map(d => d.name)
+
+const NAV: NavItem[] = [
+  { id: 'clientes', label: 'Clientes', icon: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-2.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a4 4 0 10-3-1.5" />
+    </svg>
+  ) },
+]
+
+function fmtDate(d: string) {
+  if (!d) return '—'
+  const [y, m, day] = d.split('-')
+  return `${day}/${m}/${y}`
+}
+
+function urgencyValue(days: number) {
+  if (days <= 0) return 1
+  if (days <= 30) return 0.75 + ((30 - days) / 30) * 0.25
+  if (days <= 90) return 0.5 + ((90 - days) / 60) * 0.25
+  if (days <= 365) return ((365 - days) / 275) * 0.5
+  return 0
+}
+
+export default function AdminPanel() {
+  const [empresasList, setEmpresasList] = useState<Empresa[]>(seedEmpresas)
+  const [selected, setSelected] = useState<Empresa | null>(null)
+  const [tab, setTab] = useState<'dashboard' | 'carga' | 'accidentes'>('dashboard')
+  const [docsState, setDocsState] = useState<DocItem[]>([])
+  const [navOpen, setNavOpen] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [uploadOk, setUploadOk] = useState(false)
+  const [informeOpen, setInformeOpen] = useState(false)
+
+  // Form de alta de empresa
+  const [fName, setFName] = useState('')
+  const [fRubro, setFRubro] = useState('')
+  const [fSede, setFSede] = useState('')
+  const [fColor, setFColor] = useState(COLOR_SWATCHES[0])
+  const [fClient, setFClient] = useState(true)
+
+  function enterEmpresa(e: Empresa) {
+    setSelected(e)
+    setTab('dashboard')
+    setDocsState(empresaDocs(e.severidad))
+    setUploadOk(false)
+  }
+
+  function crearEmpresa() {
+    if (!fName.trim()) return
+    const slug = fName.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    const nueva: Empresa = {
+      id: slug || `e${Date.now()}`, name: fName.trim(), slug: slug || `e${Date.now()}`,
+      color: fColor, rubro: fRubro.trim() || 'Sin especificar', sede: fSede.trim() || 'Sin sede', isClient: fClient,
+      severidad: 0, factor: 1,
+    }
+    setEmpresasList(l => [nueva, ...l])
+    setCreateOpen(false)
+    setFName(''); setFRubro(''); setFSede(''); setFColor(COLOR_SWATCHES[0]); setFClient(true)
+  }
+
+  // Form de carga de documento
+  const [dTipo, setDTipo] = useState('')
+  const [dEmision, setDEmision] = useState('')
+  const [dVenc, setDVenc] = useState('')
+
+  function cargarDoc() {
+    if (!dTipo || !dVenc) return
+    const today = new Date()
+    const days = Math.round((new Date(dVenc + 'T00:00:00').getTime() - today.getTime()) / 86400000)
+    const status: DocItem['status'] = days <= 0 ? 'expired' : days <= 30 ? 'expiring' : 'valid'
+    const nuevo: DocItem = { id: Date.now(), name: dTipo, status, expiry: dVenc, desvio: 'sin' }
+    setDocsState(d => [nuevo, ...d.filter(x => x.name !== dTipo)])
+    setUploadOk(true)
+    setDTipo(''); setDEmision(''); setDVenc('')
+    setTimeout(() => setUploadOk(false), 2500)
+  }
+
+  return (
+    <div className="min-h-screen flex" style={{ backgroundColor: COLORS.bg }}>
+      <Sidebar items={NAV} active="clientes" onChange={() => setSelected(null)} role="Administrador" empresa="Safety Services"
+        open={navOpen} onClose={() => setNavOpen(false)} />
+
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* TOP BAR */}
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+          <div className="px-4 md:px-6 h-16 flex items-center justify-between">
+            <div className="flex items-center gap-3 min-w-0">
+              <button onClick={() => setNavOpen(true)} className="md:hidden w-10 h-10 -ml-1 rounded-xl flex items-center justify-center hover:bg-gray-100" aria-label="Menú">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke={COLORS.grayDark} strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+              <div className="md:hidden"><Logo size={34} /></div>
+              {selected ? (
+                <button onClick={() => setSelected(null)} className="flex items-center gap-2 min-w-0 group">
+                  <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke={COLORS.gray} strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                  <div className="min-w-0 text-left">
+                    <h1 className="font-display font-extrabold text-lg leading-none truncate" style={{ color: COLORS.grayDark }}>{selected.name}</h1>
+                    <p className="text-xs mt-0.5" style={{ color: COLORS.gray }}>{selected.sede}</p>
+                  </div>
+                </button>
+              ) : (
+                <div>
+                  <h1 className="font-display font-extrabold text-lg leading-none" style={{ color: COLORS.grayDark }}>Mis clientes</h1>
+                  <p className="text-xs mt-1" style={{ color: COLORS.gray }}>{empresasList.length} empresas</p>
+                </div>
+              )}
+            </div>
+
+            {!selected && (
+              <button onClick={() => setCreateOpen(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-semibold hover:opacity-90 transition-opacity"
+                style={{ backgroundColor: COLORS.green }}>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                <span className="hidden sm:inline">Nuevo cliente</span>
+              </button>
+            )}
+          </div>
+        </header>
+
+        <main className="max-w-7xl w-full mx-auto px-4 md:px-6 py-6">
+
+          {/* ══════════ GRILLA DE EMPRESAS ══════════ */}
+          {!selected && (
+            <div className="ss-animate">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                {empresasList.map(e => <EmpresaCard key={e.id} empresa={e} onEnter={enterEmpresa} />)}
+                {/* Card para agregar */}
+                <button onClick={() => setCreateOpen(true)}
+                  className="rounded-3xl border-2 border-dashed flex flex-col items-center justify-center gap-2 py-10 transition-colors hover:bg-white min-h-[260px]"
+                  style={{ borderColor: '#D6DAD4' }}>
+                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ backgroundColor: COLORS.greenLight }}>
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke={COLORS.green} strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                  </div>
+                  <span className="text-sm font-semibold" style={{ color: COLORS.grayDark }}>Nuevo cliente</span>
+                  <span className="text-xs" style={{ color: COLORS.gray }}>Dar de alta una empresa</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════ WORKSPACE DE EMPRESA ══════════ */}
+          {selected && (
+            <div className="ss-animate space-y-5">
+              {/* Encabezado de empresa */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
+                <EmpresaLogo name={selected.name} color={selected.color} slug={selected.slug} size={60} />
+                <div className="min-w-0 flex-1">
+                  <h2 className="font-display text-xl font-extrabold" style={{ color: COLORS.grayDark }}>{selected.name}</h2>
+                  <p className="text-sm" style={{ color: COLORS.gray }}>{selected.rubro} · {selected.sede}</p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="hidden sm:inline text-xs font-semibold px-3 py-1.5 rounded-full"
+                    style={selected.isClient
+                      ? { backgroundColor: COLORS.greenLight, color: COLORS.greenDark }
+                      : { backgroundColor: '#FBF3DD', color: '#8A6A12' }}>
+                    {selected.isClient ? 'Cliente oficial de Safety Services' : 'Prospecto / Demo'}
+                  </span>
+                  <button onClick={() => setInformeOpen(true)}
+                    className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-white text-sm font-semibold hover:opacity-90 transition-opacity"
+                    style={{ backgroundColor: COLORS.grayDark }}>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    <span className="hidden sm:inline">Informe PDF</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Tabs */}
+              <div className="flex gap-2 border-b border-gray-200">
+                {([['dashboard', 'Dashboard'], ['accidentes', 'Carga de accidentes'], ['carga', 'Carga de documentación']] as const).map(([id, label]) => (
+                  <button key={id} onClick={() => setTab(id)}
+                    className="px-4 py-2.5 text-sm font-semibold -mb-px border-b-2 transition-colors"
+                    style={tab === id
+                      ? { borderColor: COLORS.green, color: COLORS.greenDark }
+                      : { borderColor: 'transparent', color: COLORS.gray }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {tab === 'dashboard' && <EmpresaDashboard empresa={selected} docs={docsState} />}
+              {tab === 'accidentes' && <CargaAccidentes color={selected.color} />}
+              {tab === 'carga' && (
+                <CargaDocumentacion docs={docsState} tipo={dTipo} setTipo={setDTipo}
+                  emision={dEmision} setEmision={setDEmision} venc={dVenc} setVenc={setDVenc}
+                  onCargar={cargarDoc} uploadOk={uploadOk} color={selected.color} />
+              )}
+            </div>
+          )}
+        </main>
+      </div>
+
+      <DemoSwitcher current="admin" />
+
+      {/* ══════════ MODAL ALTA EMPRESA ══════════ */}
+      {createOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setCreateOpen(false)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md ss-animate overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="font-display font-bold text-lg" style={{ color: COLORS.grayDark }}>Nuevo cliente</h3>
+              <button onClick={() => setCreateOpen(false)} className="p-1.5 rounded-lg hover:bg-gray-100">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke={COLORS.gray} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <Field label="Nombre de la empresa *">
+                <input value={fName} onChange={e => setFName(e.target.value)} placeholder="Ej: Banco Comafi"
+                  className="ss-input" style={{ color: COLORS.grayDark }} />
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Rubro">
+                  <input value={fRubro} onChange={e => setFRubro(e.target.value)} placeholder="Industria…" className="ss-input" style={{ color: COLORS.grayDark }} />
+                </Field>
+                <Field label="Sede">
+                  <input value={fSede} onChange={e => setFSede(e.target.value)} placeholder="Banfield" className="ss-input" style={{ color: COLORS.grayDark }} />
+                </Field>
+              </div>
+              <Field label="Color de marca">
+                <div className="flex gap-2 flex-wrap">
+                  {COLOR_SWATCHES.map(c => (
+                    <button key={c} onClick={() => setFColor(c)}
+                      className="w-8 h-8 rounded-lg transition-transform hover:scale-110"
+                      style={{ backgroundColor: c, outline: fColor === c ? `2px solid ${COLORS.grayDark}` : 'none', outlineOffset: 2 }} />
+                  ))}
+                </div>
+              </Field>
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input type="checkbox" checked={fClient} onChange={e => setFClient(e.target.checked)} className="w-4 h-4 accent-green-700" />
+                <span className="text-sm" style={{ color: COLORS.grayDark }}>Marcar como cliente oficial</span>
+              </label>
+              {/* Preview mini */}
+              <div className="rounded-xl overflow-hidden border border-gray-100">
+                <div className="px-4 py-3" style={{ background: `linear-gradient(135deg, ${fColor}, ${fColor})` }}>
+                  <p className="text-[10px] italic font-semibold" style={{ color: 'rgba(255,255,255,.85)' }}>
+                    {fClient ? 'CLIENTE OFICIAL DE SAFETY SERVICES' : 'PROSPECTO · DEMO'}
+                  </p>
+                  <p className="font-display text-white font-extrabold">{fName || 'Nombre de la empresa'}</p>
+                </div>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
+              <button onClick={() => setCreateOpen(false)} className="px-4 py-2 rounded-xl text-sm font-semibold border border-gray-200" style={{ color: COLORS.gray }}>Cancelar</button>
+              <button onClick={crearEmpresa} className="px-4 py-2 rounded-xl text-white text-sm font-semibold" style={{ backgroundColor: COLORS.green }}>Crear cliente</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════ MODAL INFORME PDF (por empresa) ══════════ */}
+      {informeOpen && selected && (() => {
+        const accMes = empresaAccidentesPorMes(selected.factor)
+        const totalAcc = accMes.reduce((s, m) => s + m.accidentes, 0)
+        return (
+          <div className="fixed inset-0 z-[80] overflow-y-auto">
+            <div className="no-print absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setInformeOpen(false)} />
+            <div className="relative min-h-full flex flex-col items-center py-8 px-4">
+              <div className="no-print sticky top-0 z-10 mb-4 flex items-center gap-3 bg-white rounded-2xl shadow-lg px-4 py-3">
+                <p className="text-sm font-semibold" style={{ color: COLORS.grayDark }}>Informe de {selected.name}</p>
+                <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-semibold hover:opacity-90" style={{ backgroundColor: COLORS.green }}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                  Guardar como PDF
+                </button>
+                <button onClick={() => setInformeOpen(false)} className="p-2 rounded-xl hover:bg-gray-100">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke={COLORS.gray} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="bg-white rounded-xl shadow-2xl w-full max-w-[820px]">
+                <InformeReporte empresa={selected.name} docs={docsState} accidentes={totalAcc}
+                  indices={empresaIndices(selected.factor)} porArea={empresaAccidentesPorArea(selected.factor)} />
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      <style jsx global>{`
+        .ss-input { width: 100%; padding: 0.6rem 0.85rem; border-radius: 0.6rem; border: 1px solid #e5e7eb; font-size: 0.875rem; outline: none; }
+        .ss-input:focus { box-shadow: 0 0 0 2px ${COLORS.green}55; border-color: ${COLORS.green}; }
+      `}</style>
+    </div>
+  )
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.gray }}>{label}</label>
+      {children}
+    </div>
+  )
+}
+
+// ══════════════════════════ DASHBOARD DE LA EMPRESA ══════════════════════════
+function EmpresaDashboard({ empresa, docs }: { empresa: Empresa; docs: DocItem[] }) {
+  const total = docs.length
+  const vig = docs.filter(d => d.status === 'valid').length
+  const exp = docs.filter(d => d.status === 'expiring').length
+  const ven = docs.filter(d => d.status === 'expired').length
+
+  const today = new Date()
+  const daysTo = (iso: string) => Math.round((new Date(iso + 'T00:00:00').getTime() - today.getTime()) / 86400000)
+  const urgente = docs.map(d => ({ ...d, days: daysTo(d.expiry) })).sort((a, b) => a.days - b.days)[0]
+  const gaugeValue = urgente ? urgencyValue(urgente.days) : 0
+
+  const accMes = empresaAccidentesPorMes(empresa.factor)
+  const accArea = empresaAccidentesPorArea(empresa.factor)
+  const partes = empresaPartes(empresa.factor)
+  const idx = empresaIndices(empresa.factor)
+  const totalAcc = accMes.reduce((s, m) => s + m.accidentes, 0)
+  const sinInvestigar = Math.max(0, Math.round(5 * empresa.factor))
+
+  return (
+    <div className="space-y-5">
+      {/* Alertas del admin */}
+      {(ven > 0 || sinInvestigar > 0) && (
+        <div className="rounded-2xl px-5 py-3.5 flex items-center gap-3 flex-wrap" style={{ backgroundColor: '#FBE9E5', border: '1px solid #F3C9C0' }}>
+          <span className="text-xl">⚠️</span>
+          <p className="text-sm font-semibold" style={{ color: '#9A2A18' }}>
+            Atención:
+            {ven > 0 && ` ${ven} documento${ven > 1 ? 's' : ''} vencido${ven > 1 ? 's' : ''}`}
+            {ven > 0 && sinInvestigar > 0 && ' ·'}
+            {sinInvestigar > 0 && ` ${sinInvestigar} accidentes sin investigar`}
+          </p>
+        </div>
+      )}
+
+      {/* Índices */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: 'Accidentes acumulados', value: totalAcc, color: COLORS.grayDark },
+          { label: 'Índice de frecuencia', value: idx.frecuencia.toFixed(2), color: COLORS.danger },
+          { label: 'Índice de gravedad', value: idx.gravedad.toFixed(2), color: COLORS.green },
+          { label: 'Índice de incidencia', value: idx.incidencia.toFixed(2), color: COLORS.warn },
+        ].map(k => (
+          <div key={k.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 border-l-4" style={{ borderLeftColor: k.color }}>
+            <p className="text-3xl font-bold" style={{ color: k.color }}>{k.value}</p>
+            <p className="text-sm font-semibold mt-1" style={{ color: COLORS.grayDark }}>{k.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Mes + documental */}
+      <div className="grid lg:grid-cols-3 gap-5">
+        <Card title="Accidentes por mes" className="lg:col-span-2">
+          <ResponsiveContainer width="100%" height={240}>
+            <AreaChart data={accMes} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="aMes" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={COLORS.green} stopOpacity={0.4} />
+                  <stop offset="100%" stopColor={COLORS.green} stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false} />
+              <XAxis dataKey="mes" tick={{ fontSize: 12, fill: COLORS.gray }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 12, fill: COLORS.gray }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #eee', fontSize: 13 }} />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Area type="monotone" dataKey="incidentes" name="Incidentes" stroke={COLORS.grayMid} fill="none" strokeWidth={2} strokeDasharray="4 3" />
+              <Area type="monotone" dataKey="accidentes" name="Accidentes" stroke={COLORS.green} fill="url(#aMes)" strokeWidth={2.5} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </Card>
+
+        <Card title="Estado de la documentación"
+          action={<span className="text-xs px-2.5 py-1 rounded-full font-semibold" style={{ backgroundColor: COLORS.greenLight, color: COLORS.greenDark }}>{vig}/{total}</span>}>
+          <div className="flex flex-col items-center">
+            <Gauge value={gaugeValue} size={210} />
+            {urgente && (() => {
+              const us = statusStyle(urgente.status); const venc = urgente.days < 0
+              return (
+                <div className="w-full rounded-xl px-3 py-2.5 text-center -mt-1" style={{ backgroundColor: us.bg }}>
+                  <p className="text-xs font-semibold" style={{ color: us.text }}>{urgente.name}</p>
+                  <p className="text-[11px]" style={{ color: us.text }}>{venc ? `Venció hace ${Math.abs(urgente.days)} días` : `Vence en ${urgente.days} días`}</p>
+                </div>
+              )
+            })()}
+            <div className="grid grid-cols-3 gap-2 w-full mt-3">
+              {[['Vigentes', vig, COLORS.greenLight, COLORS.greenDark], ['Por vencer', exp, '#FBF3DD', '#8A6A12'], ['Vencidos', ven, '#FBE9E5', '#9A2A18']].map(([l, v, bg, c]) => (
+                <div key={l as string} className="text-center rounded-xl py-2" style={{ backgroundColor: bg as string }}>
+                  <p className="text-xl font-bold" style={{ color: c as string }}>{v as number}</p>
+                  <p className="text-[10px] font-semibold" style={{ color: c as string }}>{l as string}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Área + cuerpo */}
+      <div className="grid lg:grid-cols-2 gap-5">
+        <Card title="Accidentes por área">
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={accArea} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false} />
+              <XAxis dataKey="area" tick={{ fontSize: 11, fill: COLORS.gray }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 12, fill: COLORS.gray }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <Tooltip cursor={{ fill: '#f6f6f6' }} contentStyle={{ borderRadius: 12, border: '1px solid #eee', fontSize: 13 }} />
+              <Bar dataKey="valor" name="Accidentes" radius={[6, 6, 0, 0]}>
+                {accArea.map((e, i) => <Cell key={i} fill={e.valor >= 10 ? COLORS.danger : e.valor >= 6 ? COLORS.warn : COLORS.green} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+
+        <Card title="Partes del cuerpo afectadas">
+          <BodyMap2 data={partes} />
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+// ══════════════════════════ CARGA DE DOCUMENTACIÓN ══════════════════════════
+function CargaDocumentacion({
+  docs, tipo, setTipo, emision, setEmision, venc, setVenc, onCargar, uploadOk, color,
+}: {
+  docs: DocItem[]
+  tipo: string; setTipo: (v: string) => void
+  emision: string; setEmision: (v: string) => void
+  venc: string; setVenc: (v: string) => void
+  onCargar: () => void
+  uploadOk: boolean
+  color: string
+}) {
+  return (
+    <div className="grid lg:grid-cols-5 gap-5 items-start">
+      {/* Form */}
+      <div className="lg:col-span-2">
+        <Card title="Cargar documento">
+          {uploadOk && (
+            <div className="mb-4 rounded-xl px-4 py-3 flex items-center gap-2" style={{ backgroundColor: COLORS.greenLight }}>
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke={COLORS.greenDark} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+              <p className="text-sm font-semibold" style={{ color: COLORS.greenDark }}>Documento cargado. Ya lo ve el cliente.</p>
+            </div>
+          )}
+          <div className="space-y-4">
+            <Field label="Tipo de documento *">
+              <select value={tipo} onChange={e => setTipo(e.target.value)} className="ss-input" style={{ color: COLORS.grayDark, background: '#fff' }}>
+                <option value="">Seleccioná el tipo…</option>
+                {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Fecha de emisión">
+                <input type="date" value={emision} onChange={e => setEmision(e.target.value)} className="ss-input" style={{ color: COLORS.grayDark }} />
+              </Field>
+              <Field label="Vence el *">
+                <input type="date" value={venc} onChange={e => setVenc(e.target.value)} className="ss-input" style={{ color: COLORS.grayDark }} />
+              </Field>
+            </div>
+            <Field label="Archivo (PDF o imagen) *">
+              <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed rounded-xl cursor-pointer transition-colors hover:bg-gray-50" style={{ borderColor: '#D6DAD4' }}>
+                <svg className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke={COLORS.grayMid} strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                <span className="text-xs" style={{ color: COLORS.gray }}>Seleccionar archivo</span>
+                <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" />
+              </label>
+            </Field>
+            <button onClick={onCargar}
+              className="w-full py-3 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+              style={{ backgroundColor: color }} disabled={!tipo || !venc}>
+              Cargar documento
+            </button>
+          </div>
+        </Card>
+      </div>
+
+      {/* Lista de docs cargados */}
+      <div className="lg:col-span-3">
+        <Card title="Documentación cargada" action={<span className="text-xs" style={{ color: COLORS.gray }}>{docs.length} documentos</span>}>
+          <div className="space-y-1 max-h-[560px] overflow-y-auto">
+            {docs.map(doc => {
+              const s = statusStyle(doc.status)
+              return (
+                <div key={doc.id} className="flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-gray-50">
+                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.hex }} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium truncate" style={{ color: COLORS.grayDark }}>{doc.name}</p>
+                    <p className="text-xs" style={{ color: COLORS.gray }}>{doc.status === 'expired' ? 'Venció' : 'Vence'} el {fmtDate(doc.expiry)}</p>
+                  </div>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full flex-shrink-0" style={{ backgroundColor: s.bg, color: s.text }}>{s.label}</span>
+                  <button className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500 flex-shrink-0" title="Eliminar">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M4 7h16" /></svg>
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+      </div>
+    </div>
+  )
+}

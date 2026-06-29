@@ -1,0 +1,15 @@
+{
+  "name": "Safety Services — Gestión de H&S",
+  "short_name": "Safety Services",
+  "description": "Tablero de siniestralidad y documentación de Higiene y Seguridad",
+  "start_url": "/preview/cliente",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F4F5F3",
+  "theme_color": "#6FB63F",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

@@ -3,25 +3,63 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #F4F5F3;
+  --foreground: #2A2D2A;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
   }
+  /* Tipografía de marca / titulares */
+  .font-display {
+    font-family: var(--font-sora), var(--font-inter), system-ui, sans-serif;
+    letter-spacing: -0.01em;
+  }
+}
+
+/* Scrollbar discreta, estilo producto */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d6dad4; border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: #b9bfb6; background-clip: content-box; }
+
+/* Animaciones suaves para que no se sienta "plantilla" */
+@keyframes ss-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.ss-animate {
+  animation: ss-fade-up .45s cubic-bezier(.21,.6,.35,1) both;
+}
+
+/* Campanita que insiste hasta que la abren */
+@keyframes ss-ring {
+  0%, 70%, 100% { transform: rotate(0); }
+  75% { transform: rotate(-12deg); }
+  80% { transform: rotate(10deg); }
+  85% { transform: rotate(-8deg); }
+  90% { transform: rotate(6deg); }
+  95% { transform: rotate(-3deg); }
+}
+.ss-bell { animation: ss-ring 2.2s ease-in-out infinite; transform-origin: top center; }
+
+/* Impresión: solo se imprime el informe (#informe) */
+@media print {
+  body * { visibility: hidden !important; }
+  #informe, #informe * { visibility: visible !important; }
+  #informe { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none !important; }
+  .no-print { display: none !important; }
 }
