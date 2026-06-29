@@ -4,11 +4,14 @@ import { useState } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   PieChart, Pie, AreaChart, Area, CartesianGrid, Legend, LabelList,
+  LineChart, Line, ReferenceLine,
 } from 'recharts'
 import { COLORS, statusStyle } from '@/lib/theme'
 import {
   documents, accidentesPorMes, accidentesPorArea, accidentesPorTurno,
   investigacion, diagnosticos, indices, partesCuerpo, PART_LABELS,
+  gravedadLesiones, circunstancia, causas, origen, accidentesPorPuesto,
+  diasPerdidos, indiceComparado,
 } from '@/lib/mockData'
 import Gauge from '@/components/Gauge'
 import BodyMap2 from '@/components/BodyMap2'
@@ -25,6 +28,35 @@ function parteHeat(count: number) {
   if (count <= 2) return '#C7E3AC'
   if (count <= 4) return COLORS.warn
   return COLORS.danger
+}
+
+const CAT_COLORS = [COLORS.green, COLORS.warn, COLORS.danger, COLORS.grayMid, COLORS.greenDark, '#7E57C2', '#1E9BD7']
+
+function Donut({ data }: { data: { label: string; value: number }[] }) {
+  const total = data.reduce((s, d) => s + d.value, 0)
+  return (
+    <>
+      <ResponsiveContainer width="100%" height={160}>
+        <PieChart>
+          <Pie data={data} dataKey="value" nameKey="label" cx="50%" cy="50%" innerRadius={40} outerRadius={64} paddingAngle={3}>
+            {data.map((e, i) => <Cell key={i} fill={CAT_COLORS[i % CAT_COLORS.length]} />)}
+          </Pie>
+          <Tooltip formatter={(v: any) => `${v}`} contentStyle={{ borderRadius: 12, border: '1px solid #eee', fontSize: 13 }} />
+        </PieChart>
+      </ResponsiveContainer>
+      <div className="space-y-1 mt-1">
+        {data.map((e, i) => (
+          <div key={e.label} className="flex items-center justify-between text-xs">
+            <span className="flex items-center gap-1.5 min-w-0" style={{ color: COLORS.grayDark }}>
+              <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: CAT_COLORS[i % CAT_COLORS.length] }} />
+              <span className="truncate">{e.label}</span>
+            </span>
+            <span className="font-bold flex-shrink-0 ml-2" style={{ color: COLORS.grayDark }}>{e.value}{total ? ` · ${Math.round((e.value / total) * 100)}%` : ''}</span>
+          </div>
+        ))}
+      </div>
+    </>
+  )
 }
 
 function Card({ title, children, className = '', action }: { title?: string; children: React.ReactNode; className?: string; action?: React.ReactNode }) {
@@ -473,6 +505,60 @@ export default function PreviewClienteDashboard() {
                       ))}
                     </div>
                   </div>
+                </Card>
+              </div>
+
+              {/* Fila: gravedad + circunstancia + causas + origen (tortas) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+                <Card title="Gravedad de las lesiones"><Donut data={gravedadLesiones.map(d => ({ label: d.tipo, value: d.valor }))} /></Card>
+                <Card title="Circunstancia"><Donut data={circunstancia.map(d => ({ label: d.tipo, value: d.valor }))} /></Card>
+                <Card title="Causas"><Donut data={causas.map(d => ({ label: d.tipo, value: d.valor }))} /></Card>
+                <Card title="Origen del accidente"><Donut data={origen.map(d => ({ label: d.tipo, value: d.valor }))} /></Card>
+              </div>
+
+              {/* Índice de siniestralidad comparado */}
+              <Card title="Índice de siniestralidad — cliente vs. límite admisible"
+                action={<span className="text-xs px-2.5 py-1 rounded-full font-semibold" style={{ backgroundColor: '#FBE9E5', color: '#9A2A18' }}>Límite: 0,30</span>}>
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={indiceComparado} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false} />
+                    <XAxis dataKey="mes" tick={{ fontSize: 12, fill: COLORS.gray }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 12, fill: COLORS.gray }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #eee', fontSize: 13 }} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <ReferenceLine y={0.30} stroke={COLORS.danger} strokeDasharray="6 4" />
+                    <Line type="monotone" dataKey="limite" name="Límite admisible" stroke={COLORS.danger} strokeWidth={1.5} strokeDasharray="6 4" dot={false} />
+                    <Line type="monotone" dataKey="cliente" name="Índice del cliente" stroke={COLORS.green} strokeWidth={2.5} dot={{ r: 3, fill: COLORS.green }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </Card>
+
+              {/* Días perdidos + accidentes por puesto */}
+              <div className="grid lg:grid-cols-2 gap-5">
+                <Card title="Días perdidos por accidente">
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart data={diasPerdidos} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false} />
+                      <XAxis dataKey="mes" tick={{ fontSize: 12, fill: COLORS.gray }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 12, fill: COLORS.gray }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      <Tooltip formatter={(v: any) => `${v} días`} contentStyle={{ borderRadius: 12, border: '1px solid #eee', fontSize: 13 }} />
+                      <Line type="monotone" dataKey="dias" name="Días perdidos" stroke={COLORS.warn} strokeWidth={2.5} dot={{ r: 3, fill: COLORS.warn }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </Card>
+
+                <Card title="Accidentes por puesto de trabajo">
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={accidentesPorPuesto} layout="vertical" margin={{ top: 10, right: 24, left: 20, bottom: 0 }}>
+                      <XAxis type="number" hide />
+                      <YAxis type="category" dataKey="puesto" tick={{ fontSize: 12, fill: COLORS.grayDark }} axisLine={false} tickLine={false} width={120} />
+                      <Tooltip cursor={{ fill: '#f6f6f6' }} contentStyle={{ borderRadius: 12, border: '1px solid #eee', fontSize: 13 }} />
+                      <Bar dataKey="valor" name="Accidentes" radius={[0, 6, 6, 0]} barSize={20}>
+                        {accidentesPorPuesto.map((e, i) => <Cell key={i} fill={e.valor >= 5 ? COLORS.danger : e.valor >= 3 ? COLORS.warn : COLORS.green} />)}
+                        <LabelList dataKey="valor" position="right" style={{ fill: COLORS.grayDark, fontSize: 12, fontWeight: 700 }} />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
                 </Card>
               </div>
 

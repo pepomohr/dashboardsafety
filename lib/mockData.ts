@@ -116,6 +116,50 @@ export const indices = {
   accidentesAcumulados: 12,
 }
 
+// Gravedad de las lesiones (leve/moderada/grave)
+export const gravedadLesiones = [
+  { tipo: 'Leve',     valor: 7 },
+  { tipo: 'Moderada', valor: 4 },
+  { tipo: 'Grave',    valor: 1 },
+]
+
+// Causas de los accidentes
+export const causas = [
+  { tipo: 'Acto inseguro',        valor: 6 },
+  { tipo: 'Condición insegura',   valor: 4 },
+  { tipo: 'Factor personal',      valor: 1 },
+  { tipo: 'Factor del trabajo',   valor: 1 },
+]
+
+// Origen / mecanismo del accidente
+export const origen = [
+  { tipo: 'Caída a nivel',        valor: 3 },
+  { tipo: 'Golpe con objeto',     valor: 4 },
+  { tipo: 'Sobreesfuerzo',        valor: 2 },
+  { tipo: 'Atrapamiento',         valor: 1 },
+  { tipo: 'Manipulación manual',  valor: 2 },
+]
+
+// Accidentes por puesto de trabajo
+export const accidentesPorPuesto = [
+  { puesto: 'Operario de planta', valor: 7 },
+  { puesto: 'Mantenimiento',      valor: 3 },
+  { puesto: 'Logística',          valor: 2 },
+  { puesto: 'Administración',     valor: 0 },
+]
+
+// Días perdidos por accidente (por mes)
+export const diasPerdidos = MESES.map((mes, i) => ({
+  mes, dias: [12, 18, 0, 0, 0, 5, 7, 0, 6, 14, 0, 10][i],
+}))
+
+// Índice de siniestralidad comparado: nivel límite vs nivel del cliente (por mes)
+export const indiceComparado = MESES.map((mes, i) => ({
+  mes,
+  limite: 0.30,
+  cliente: [0.18, 0.36, 0, 0, 0, 0.15, 0.18, 0, 0.22, 0.23, 0, 0.26][i],
+}))
+
 // Etiquetas legibles de cada zona del cuerpo
 export const PART_LABELS: Record<string, string> = {
   cabeza: 'Cabeza', cuello: 'Cuello',
