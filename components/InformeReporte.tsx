@@ -10,7 +10,7 @@ import { DocItem } from '@/lib/mockData'
  * Firma real: guardá la imagen v8 como  public/firma.png  (si no, va la firma tipográfica).
  */
 
-const FIRMA_SOURCES = ['/firma.png', '/firma.jpg', '/firma.jpeg']
+const FIRMA_SOURCES = ['/firma.jpg', '/firma.png', '/firma.jpeg']
 function FirmaKlopp() {
   const [idx, setIdx] = useState(0)
   const failed = idx >= FIRMA_SOURCES.length
