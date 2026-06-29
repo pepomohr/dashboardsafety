@@ -69,7 +69,7 @@ function Inner({ items, active, onPick, role, empresa }: {
             <p className="text-xs font-medium truncate" style={{ color: COLORS.grayDark }}>{empresa}</p>
           </div>
         </div>
-        <p className="text-[10px] mt-2 px-2" style={{ color: COLORS.grayMid }}>Ing. Eduardo Klopp · v1.0</p>
+        <p className="text-[10px] mt-2 px-2" style={{ color: COLORS.grayMid }}>Dashboard Safety Services · v1.0</p>
       </div>
     </>
   )

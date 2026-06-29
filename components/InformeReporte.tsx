@@ -22,11 +22,6 @@ function FirmaKlopp() {
       ) : (
         <p style={{ fontFamily: 'Georgia, serif', fontStyle: 'italic', fontSize: 26, color: COLORS.greenDark, lineHeight: 1 }}>E. Klopp</p>
       )}
-      <div className="mt-2 pt-2 border-t text-center" style={{ borderColor: COLORS.grayDark, minWidth: 230 }}>
-        <p className="text-sm font-bold" style={{ color: COLORS.grayDark }}>Ing. Eduardo Klopp</p>
-        <p className="text-xs" style={{ color: COLORS.gray }}>Higiene y Seguridad en el Trabajo</p>
-        <p className="text-xs" style={{ color: COLORS.gray }}>Safety Services</p>
-      </div>
     </div>
   )
 }
