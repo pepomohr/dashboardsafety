@@ -3,10 +3,14 @@
 import { useState } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
-  AreaChart, Area, CartesianGrid, Legend,
+  AreaChart, Area, CartesianGrid, Legend, PieChart, Pie, LineChart, Line, ReferenceLine, LabelList,
 } from 'recharts'
 import { COLORS, statusStyle } from '@/lib/theme'
-import { documents, DocItem } from '@/lib/mockData'
+import {
+  documents, DocItem, PART_LABELS,
+  accidentesPorTurno, diagnosticos, investigacion,
+  gravedadLesiones, circunstancia, causas, origen, accidentesPorPuesto, diasPerdidos, indiceComparado,
+} from '@/lib/mockData'
 import {
   empresas as seedEmpresas, Empresa,
   empresaDocs, empresaAccidentesPorMes, empresaAccidentesPorArea, empresaPartes, empresaIndices,
@@ -14,6 +18,7 @@ import {
 import Card from '@/components/Card'
 import Gauge from '@/components/Gauge'
 import BodyMap2 from '@/components/BodyMap2'
+import Donut from '@/components/Donut'
 import EmpresaCard from '@/components/EmpresaCard'
 import EmpresaLogo from '@/components/EmpresaLogo'
 import CargaAccidentes from '@/components/CargaAccidentes'
@@ -284,8 +289,8 @@ export default function AdminPanel() {
         const accMes = empresaAccidentesPorMes(selected.factor)
         const totalAcc = accMes.reduce((s, m) => s + m.accidentes, 0)
         return (
-          <div className="fixed inset-0 z-[80] overflow-y-auto">
-            <div className="no-print absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setInformeOpen(false)} />
+          <div className="fixed inset-0 z-[100] overflow-y-auto">
+            <div className="no-print fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setInformeOpen(false)} />
             <div className="relative min-h-full flex flex-col items-center py-8 px-4">
               <div className="no-print sticky top-0 z-10 mb-4 flex items-center gap-3 bg-white rounded-2xl shadow-lg px-4 py-3">
                 <p className="text-sm font-semibold" style={{ color: COLORS.grayDark }}>Informe de {selected.name}</p>
@@ -341,6 +346,8 @@ function EmpresaDashboard({ empresa, docs }: { empresa: Empresa; docs: DocItem[]
   const idx = empresaIndices(empresa.factor)
   const totalAcc = accMes.reduce((s, m) => s + m.accidentes, 0)
   const sinInvestigar = Math.max(0, Math.round(5 * empresa.factor))
+  const parteHeat = (c: number) => c <= 0 ? COLORS.grayLight : c <= 2 ? '#C7E3AC' : c <= 4 ? COLORS.warn : COLORS.danger
+  const partesList = Object.entries(partes).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1])
 
   return (
     <div className="space-y-5">
@@ -419,10 +426,10 @@ function EmpresaDashboard({ empresa, docs }: { empresa: Empresa; docs: DocItem[]
         </Card>
       </div>
 
-      {/* Área + cuerpo */}
-      <div className="grid lg:grid-cols-2 gap-5">
+      {/* Área + turno + tipo de lesión */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         <Card title="Accidentes por área">
-          <ResponsiveContainer width="100%" height={240}>
+          <ResponsiveContainer width="100%" height={230}>
             <BarChart data={accArea} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false} />
               <XAxis dataKey="area" tick={{ fontSize: 11, fill: COLORS.gray }} axisLine={false} tickLine={false} />
@@ -434,11 +441,115 @@ function EmpresaDashboard({ empresa, docs }: { empresa: Empresa; docs: DocItem[]
             </BarChart>
           </ResponsiveContainer>
         </Card>
-
-        <Card title="Partes del cuerpo afectadas">
-          <BodyMap2 data={partes} />
+        <Card title="Accidentes por turno">
+          <ResponsiveContainer width="100%" height={230}>
+            <BarChart data={accidentesPorTurno} layout="vertical" margin={{ top: 10, right: 30, left: 10, bottom: 0 }}>
+              <XAxis type="number" hide />
+              <YAxis type="category" dataKey="turno" tick={{ fontSize: 13, fill: COLORS.grayDark }} axisLine={false} tickLine={false} width={70} />
+              <Tooltip formatter={(v: any) => `${v}%`} cursor={{ fill: '#f6f6f6' }} contentStyle={{ borderRadius: 12, border: '1px solid #eee', fontSize: 13 }} />
+              <Bar dataKey="valor" radius={[0, 6, 6, 0]} barSize={26}>
+                {accidentesPorTurno.map((e, i) => <Cell key={i} fill={e.turno === 'Tarde' ? COLORS.green : COLORS.grayMid} />)}
+                <LabelList dataKey="valor" position="right" formatter={(v: any) => `${v}%`} style={{ fill: COLORS.grayDark, fontSize: 12, fontWeight: 700 }} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+        <Card title="Tipo de lesión">
+          <ResponsiveContainer width="100%" height={230}>
+            <BarChart data={diagnosticos} margin={{ top: 10, right: 10, left: -20, bottom: 30 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false} />
+              <XAxis dataKey="tipo" tick={{ fontSize: 10, fill: COLORS.gray }} axisLine={false} tickLine={false} angle={-25} textAnchor="end" interval={0} />
+              <YAxis tick={{ fontSize: 12, fill: COLORS.gray }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <Tooltip cursor={{ fill: '#f6f6f6' }} contentStyle={{ borderRadius: 12, border: '1px solid #eee', fontSize: 13 }} />
+              <Bar dataKey="valor" name="Casos" radius={[6, 6, 0, 0]} fill={COLORS.green} barSize={24} />
+            </BarChart>
+          </ResponsiveContainer>
         </Card>
       </div>
+
+      {/* Tortas — solo admin */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+        <Card title="Gravedad de las lesiones"><Donut data={gravedadLesiones.map(d => ({ label: d.tipo, value: d.valor }))} /></Card>
+        <Card title="Circunstancia"><Donut data={circunstancia.map(d => ({ label: d.tipo, value: d.valor }))} /></Card>
+        <Card title="Causas"><Donut data={causas.map(d => ({ label: d.tipo, value: d.valor }))} /></Card>
+        <Card title="Origen del accidente"><Donut data={origen.map(d => ({ label: d.tipo, value: d.valor }))} /></Card>
+      </div>
+
+      {/* Investigación + índice comparado — solo admin */}
+      <div className="grid lg:grid-cols-3 gap-5">
+        <Card title="Investigación de accidentes"
+          action={<span className="text-xs px-2.5 py-1 rounded-full font-semibold" style={{ backgroundColor: '#FBE9E5', color: '#9A2A18' }}>{sinInvestigar} sin investigar</span>}>
+          <Donut data={investigacion.map(e => ({ label: e.estado, value: e.valor }))} />
+        </Card>
+        <Card title="Índice de siniestralidad — vs. límite admisible" className="lg:col-span-2"
+          action={<span className="text-xs px-2.5 py-1 rounded-full font-semibold" style={{ backgroundColor: '#FBE9E5', color: '#9A2A18' }}>Límite: 0,30</span>}>
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={indiceComparado} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false} />
+              <XAxis dataKey="mes" tick={{ fontSize: 12, fill: COLORS.gray }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 12, fill: COLORS.gray }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #eee', fontSize: 13 }} />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <ReferenceLine y={0.30} stroke={COLORS.danger} strokeDasharray="6 4" />
+              <Line type="monotone" dataKey="limite" name="Límite admisible" stroke={COLORS.danger} strokeWidth={1.5} strokeDasharray="6 4" dot={false} />
+              <Line type="monotone" dataKey="cliente" name="Índice del cliente" stroke={COLORS.green} strokeWidth={2.5} dot={{ r: 3, fill: COLORS.green }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </Card>
+      </div>
+
+      {/* Días perdidos + puesto */}
+      <div className="grid lg:grid-cols-2 gap-5">
+        <Card title="Días perdidos por accidente">
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={diasPerdidos} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false} />
+              <XAxis dataKey="mes" tick={{ fontSize: 12, fill: COLORS.gray }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 12, fill: COLORS.gray }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <Tooltip formatter={(v: any) => `${v} días`} contentStyle={{ borderRadius: 12, border: '1px solid #eee', fontSize: 13 }} />
+              <Line type="monotone" dataKey="dias" name="Días perdidos" stroke={COLORS.warn} strokeWidth={2.5} dot={{ r: 3, fill: COLORS.warn }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </Card>
+        <Card title="Accidentes por puesto de trabajo">
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={accidentesPorPuesto} layout="vertical" margin={{ top: 10, right: 24, left: 20, bottom: 0 }}>
+              <XAxis type="number" hide />
+              <YAxis type="category" dataKey="puesto" tick={{ fontSize: 12, fill: COLORS.grayDark }} axisLine={false} tickLine={false} width={120} />
+              <Tooltip cursor={{ fill: '#f6f6f6' }} contentStyle={{ borderRadius: 12, border: '1px solid #eee', fontSize: 13 }} />
+              <Bar dataKey="valor" name="Accidentes" radius={[0, 6, 6, 0]} barSize={20}>
+                {accidentesPorPuesto.map((e, i) => <Cell key={i} fill={e.valor >= 5 ? COLORS.danger : e.valor >= 3 ? COLORS.warn : COLORS.green} />)}
+                <LabelList dataKey="valor" position="right" style={{ fill: COLORS.grayDark, fontSize: 12, fontWeight: 700 }} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+      </div>
+
+      {/* Cuerpo + detalle por zona */}
+      <Card title="Partes del cuerpo afectadas">
+        <div className="flex flex-col sm:flex-row gap-4 items-start">
+          <div className="flex-1 min-w-0 w-full"><BodyMap2 data={partes} /></div>
+          <div className="w-full sm:w-48 flex-shrink-0">
+            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: COLORS.gray }}>Detalle por zona</p>
+            <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+              {partesList.length === 0 && <p className="text-xs" style={{ color: COLORS.grayMid }}>Sin lesiones registradas</p>}
+              {partesList.map(([key, v], _, arr) => {
+                const max = arr[0][1]
+                return (
+                  <div key={key} className="flex items-center gap-2">
+                    <span className="text-xs truncate" style={{ color: COLORS.grayDark, width: 84 }}>{PART_LABELS[key] ?? key}</span>
+                    <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ backgroundColor: COLORS.grayLight }}>
+                      <div className="h-full rounded-full" style={{ width: `${(v / max) * 100}%`, backgroundColor: parteHeat(v) }} />
+                    </div>
+                    <span className="text-xs font-bold w-4 text-right" style={{ color: COLORS.grayDark }}>{v}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      </Card>
     </div>
   )
 }

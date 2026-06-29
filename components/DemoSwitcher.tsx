@@ -9,11 +9,11 @@ import { COLORS } from '@/lib/theme'
  */
 export default function DemoSwitcher({ current }: { current: 'admin' | 'cliente' }) {
   const items: { id: 'admin' | 'cliente'; label: string; href: string }[] = [
-    { id: 'admin', label: 'Colo (admin)', href: '/preview/admin' },
+    { id: 'admin', label: 'Admin', href: '/preview/admin' },
     { id: 'cliente', label: 'Cliente', href: '/preview/cliente' },
   ]
   return (
-    <div className="no-print fixed bottom-4 left-1/2 -translate-x-1/2 z-[90]">
+    <div className="no-print fixed bottom-4 left-1/2 -translate-x-1/2 z-40">
       <div className="flex items-center gap-1 rounded-full p-1 shadow-xl border border-gray-200"
         style={{ backgroundColor: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(8px)' }}>
         <span className="text-[10px] font-bold uppercase tracking-wide px-2 hidden sm:inline" style={{ color: COLORS.grayMid }}>Maqueta · ver como</span>

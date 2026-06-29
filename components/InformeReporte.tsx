@@ -10,13 +10,15 @@ import { DocItem } from '@/lib/mockData'
  * Firma real: guardá la imagen v8 como  public/firma.png  (si no, va la firma tipográfica).
  */
 
+const FIRMA_SOURCES = ['/firma.png', '/firma.jpg', '/firma.jpeg']
 function FirmaKlopp() {
-  const [err, setErr] = useState(false)
+  const [idx, setIdx] = useState(0)
+  const failed = idx >= FIRMA_SOURCES.length
   return (
     <div className="flex flex-col items-center">
-      {!err ? (
+      {!failed ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src="/firma.png" alt="Firma Ing. Eduardo Klopp" style={{ height: 70, objectFit: 'contain' }} onError={() => setErr(true)} />
+        <img src={FIRMA_SOURCES[idx]} alt="Firma Ing. Eduardo Klopp" style={{ height: 72, objectFit: 'contain' }} onError={() => setIdx(i => i + 1)} />
       ) : (
         <p style={{ fontFamily: 'Georgia, serif', fontStyle: 'italic', fontSize: 26, color: COLORS.greenDark, lineHeight: 1 }}>E. Klopp</p>
       )}
@@ -49,9 +51,8 @@ export default function InformeReporte({
       {/* Encabezado */}
       <div className="flex items-start justify-between pb-4 mb-5" style={{ borderBottom: `3px solid ${COLORS.green}` }}>
         <div className="flex items-center gap-3">
-          <div className="rounded-xl flex items-center justify-center" style={{ width: 52, height: 52, backgroundColor: COLORS.grayDark }}>
-            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke={COLORS.green} strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.jpg" alt="Safety Services" style={{ width: 60, height: 60, objectFit: 'contain' }} />
           <div>
             <p className="font-display text-xl font-extrabold leading-none">
               <span style={{ color: COLORS.green }}>Safety</span> <span style={{ color: COLORS.gray }}>Services</span>

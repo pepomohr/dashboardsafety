@@ -435,8 +435,8 @@ export default function PreviewClienteDashboard() {
                 </Card>
               </div>
 
-              {/* Fila: área + turno + diagnósticos + investigación */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              {/* Fila: área + turno + tipo de lesión */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 <Card title="Accidentes por área">
                   <ResponsiveContainer width="100%" height={240}>
                     <BarChart data={areaData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -481,39 +481,6 @@ export default function PreviewClienteDashboard() {
                     </BarChart>
                   </ResponsiveContainer>
                 </Card>
-
-                <Card title="Investigación de accidentes"
-                  action={<span className="text-xs px-2.5 py-1 rounded-full font-semibold" style={{ backgroundColor: '#FBE9E5', color: '#9A2A18' }}>5 sin investigar</span>}>
-                  <div className="flex items-center gap-4">
-                    <ResponsiveContainer width="55%" height={200}>
-                      <PieChart>
-                        <Pie data={investigacion} dataKey="valor" nameKey="estado" cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3}>
-                          {investigacion.map((e, i) => <Cell key={i} fill={INVEST_COLORS[i]} />)}
-                        </Pie>
-                        <Tooltip formatter={(v) => `${v}%`} contentStyle={{ borderRadius: 12, border: '1px solid #eee', fontSize: 13 }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="flex-1 space-y-2">
-                      {investigacion.map((e, i) => (
-                        <div key={e.estado} className="flex items-center justify-between text-sm">
-                          <span className="flex items-center gap-2" style={{ color: COLORS.grayDark }}>
-                            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: INVEST_COLORS[i] }} />
-                            {e.estado}
-                          </span>
-                          <span className="font-bold" style={{ color: COLORS.grayDark }}>{e.valor}%</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </Card>
-              </div>
-
-              {/* Fila: gravedad + circunstancia + causas + origen (tortas) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
-                <Card title="Gravedad de las lesiones"><Donut data={gravedadLesiones.map(d => ({ label: d.tipo, value: d.valor }))} /></Card>
-                <Card title="Circunstancia"><Donut data={circunstancia.map(d => ({ label: d.tipo, value: d.valor }))} /></Card>
-                <Card title="Causas"><Donut data={causas.map(d => ({ label: d.tipo, value: d.valor }))} /></Card>
-                <Card title="Origen del accidente"><Donut data={origen.map(d => ({ label: d.tipo, value: d.valor }))} /></Card>
               </div>
 
               {/* Índice de siniestralidad comparado */}
@@ -615,8 +582,8 @@ export default function PreviewClienteDashboard() {
 
       {/* ════════ MODAL INFORME PDF ════════ */}
       {informeOpen && (
-        <div className="fixed inset-0 z-[80] overflow-y-auto">
-          <div className="no-print absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setInformeOpen(false)} />
+        <div className="fixed inset-0 z-[100] overflow-y-auto">
+          <div className="no-print fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setInformeOpen(false)} />
           <div className="relative min-h-full flex flex-col items-center py-8 px-4">
             {/* Barra de acciones */}
             <div className="no-print sticky top-0 z-10 mb-4 flex items-center gap-3 bg-white rounded-2xl shadow-lg px-4 py-3">
