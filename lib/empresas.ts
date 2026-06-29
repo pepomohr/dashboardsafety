@@ -14,21 +14,20 @@ export interface Empresa {
 }
 
 export const empresas: Empresa[] = [
-  { id: 'comafi',   name: 'Banco Comafi',        slug: 'comafi',   color: '#E2001A', rubro: 'Banca y servicios financieros', sede: 'CABA · Microcentro', isClient: true,  severidad: 1, factor: 0.7 },
-  { id: 'belgrano', name: 'Club Atlético Belgrano', slug: 'belgrano', color: '#1E9BD7', rubro: 'Club deportivo', sede: 'Córdoba Capital', isClient: false, severidad: 2, factor: 1.0 },
-  { id: 'fenix',    name: 'Metalúrgica Fénix',   slug: 'fenix',    color: '#F57C00', rubro: 'Industria metalúrgica', sede: 'Banfield · Lomas de Zamora', isClient: true, severidad: 3, factor: 1.4 },
-  { id: 'logisur',  name: 'Logística del Sur',   slug: 'logisur',  color: '#2E7D32', rubro: 'Transporte y logística', sede: 'Avellaneda', isClient: true, severidad: 0, factor: 0.9 },
+  { id: 'comafi',   name: 'Banco Comafi', slug: 'comafi', color: '#E2001A', rubro: 'Banca y servicios financieros', sede: 'CABA · Microcentro', isClient: true, logoUrl: '/comafi.png', severidad: 3, factor: 0.7 },
+  { id: 'belgrano', name: 'Club Atlético y Social General Belgrano', slug: 'belgrano', color: '#1E9BD7', rubro: 'Club deportivo', sede: 'General Belgrano, Buenos Aires', isClient: false, logoUrl: '/escudo.png', severidad: 0, factor: 1.0 },
 ]
 
-// Documentación de la empresa: parte del set maestro y le ajusta el estado según la severidad
+// Documentación de la empresa: `severidad` = cantidad de documentos NO vigentes.
+// 0 = impecable (28/28). Marca esa cantidad alternando vencido / por vencer.
 export function empresaDocs(severidad: number): DocItem[] {
+  const issues = [26, 13, 7, 21, 8, 22, 3, 17]  // índices que se marcan como problema, en orden
   return documents.map((d, i) => {
-    let status = d.status
-    if (severidad >= 1 && i === 26) status = 'expired'
-    else if (severidad >= 2 && i === 13) status = 'expired'
-    else if (severidad >= 3 && (i === 7 || i === 21)) status = 'expiring'
-    else if (severidad === 0) status = 'valid'   // impecable
-    return { ...d, status }
+    const pos = issues.indexOf(i)
+    if (pos !== -1 && pos < severidad) {
+      return { ...d, status: pos % 2 === 0 ? 'expired' as const : 'expiring' as const }
+    }
+    return { ...d, status: 'valid' as const }
   })
 }
 

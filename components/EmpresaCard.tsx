@@ -54,7 +54,7 @@ export default function EmpresaCard({ empresa, onEnter }: { empresa: Empresa; on
 
         {/* Logo + estado documental */}
         <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
-          <EmpresaLogo name={empresa.name} color={empresa.color} slug={empresa.slug} size={52} />
+          <EmpresaLogo name={empresa.name} color={empresa.color} slug={empresa.slug} logoUrl={empresa.logoUrl} size={52} />
           <div className="text-right">
             <p className="text-lg font-bold" style={{ color: s.hex }}>{vig}/{total}</p>
             <p className="text-[10px]" style={{ color: COLORS.gray }}>docs vigentes</p>

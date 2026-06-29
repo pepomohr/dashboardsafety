@@ -9,16 +9,18 @@ import { useState } from 'react'
  * public/empresas/<slug>.png
  */
 export default function EmpresaLogo({
-  name, color, slug, size = 56, rounded = 'rounded-2xl',
+  name, color, slug, size = 56, rounded = 'rounded-2xl', logoUrl,
 }: {
   name: string
   color: string
   slug: string
   size?: number
   rounded?: string
+  logoUrl?: string
 }) {
   const [err, setErr] = useState(false)
   const initials = name.split(' ').filter(w => w.length > 2).slice(0, 2).map(w => w[0]).join('').toUpperCase()
+  const src = logoUrl || `/empresas/${slug}.png`
 
   if (err) {
     return (
@@ -30,7 +32,7 @@ export default function EmpresaLogo({
   }
   // eslint-disable-next-line @next/next/no-img-element
   return (
-    <img src={`/empresas/${slug}.png`} alt={name} width={size} height={size}
+    <img src={src} alt={name} width={size} height={size}
       className={`${rounded} object-contain bg-white flex-shrink-0`} style={{ width: size, height: size }}
       onError={() => setErr(true)} />
   )

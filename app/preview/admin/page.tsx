@@ -181,7 +181,7 @@ export default function AdminPanel() {
             <div className="ss-animate space-y-5">
               {/* Encabezado de empresa */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
-                <EmpresaLogo name={selected.name} color={selected.color} slug={selected.slug} size={60} />
+                <EmpresaLogo name={selected.name} color={selected.color} slug={selected.slug} logoUrl={selected.logoUrl} size={60} />
                 <div className="min-w-0 flex-1">
                   <h2 className="font-display text-xl font-extrabold" style={{ color: COLORS.grayDark }}>{selected.name}</h2>
                   <p className="text-sm" style={{ color: COLORS.gray }}>{selected.rubro} · {selected.sede}</p>
