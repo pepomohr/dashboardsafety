@@ -57,6 +57,7 @@ export default function AdminPanel() {
   const [selected, setSelected] = useState<Empresa | null>(null)
   const [tab, setTab] = useState<'dashboard' | 'carga' | 'accidentes'>('dashboard')
   const [docsState, setDocsState] = useState<DocItem[]>([])
+  const [sucursalId, setSucursalId] = useState<string | null>(null)
   const [navOpen, setNavOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [uploadOk, setUploadOk] = useState(false)
@@ -72,9 +73,22 @@ export default function AdminPanel() {
   function enterEmpresa(e: Empresa) {
     setSelected(e)
     setTab('dashboard')
-    setDocsState(empresaDocs(e.severidad))
+    const suc = e.sucursales?.[0] ?? null
+    setSucursalId(suc?.id ?? null)
+    setDocsState(empresaDocs(suc?.severidad ?? e.severidad))
     setUploadOk(false)
   }
+
+  function changeSucursal(e: Empresa, id: string) {
+    const suc = e.sucursales?.find(s => s.id === id)
+    setSucursalId(id)
+    setDocsState(empresaDocs(suc?.severidad ?? e.severidad))
+    setUploadOk(false)
+  }
+
+  // Sucursal activa y sus parámetros (o la empresa si no tiene sucursales)
+  const branch = selected?.sucursales?.find(s => s.id === sucursalId) ?? null
+  const activeFactor = branch?.factor ?? selected?.factor ?? 1
 
   function crearEmpresa() {
     if (!fName.trim()) return
@@ -202,6 +216,26 @@ export default function AdminPanel() {
                 </div>
               </div>
 
+              {/* Selector de sucursal (si la empresa tiene varias) */}
+              {selected.sucursales && selected.sucursales.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3">
+                  <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide mr-1" style={{ color: COLORS.gray }}>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke={COLORS.gray} strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                    Sucursal
+                  </span>
+                  {selected.sucursales.map(s => {
+                    const a = s.id === sucursalId
+                    return (
+                      <button key={s.id} onClick={() => changeSucursal(selected!, s.id)}
+                        className="px-3.5 py-1.5 rounded-full text-sm font-semibold transition-colors border"
+                        style={a ? { backgroundColor: selected.color, color: '#fff', borderColor: selected.color } : { backgroundColor: '#fff', color: COLORS.grayDark, borderColor: '#e5e7eb' }}>
+                        {s.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
               {/* Tabs */}
               <div className="flex gap-2 border-b border-gray-200">
                 {([['dashboard', 'Dashboard'], ['accidentes', 'Carga de accidentes'], ['carga', 'Carga de documentación']] as const).map(([id, label]) => (
@@ -215,7 +249,7 @@ export default function AdminPanel() {
                 ))}
               </div>
 
-              {tab === 'dashboard' && <EmpresaDashboard empresa={selected} docs={docsState} />}
+              {tab === 'dashboard' && <EmpresaDashboard factor={activeFactor} docs={docsState} />}
               {tab === 'accidentes' && <CargaAccidentes color={selected.color} />}
               {tab === 'carga' && (
                 <CargaDocumentacion docs={docsState} tipo={dTipo} setTipo={setDTipo}
@@ -286,14 +320,14 @@ export default function AdminPanel() {
 
       {/* ══════════ MODAL INFORME PDF (por empresa) ══════════ */}
       {informeOpen && selected && (() => {
-        const accMes = empresaAccidentesPorMes(selected.factor)
+        const accMes = empresaAccidentesPorMes(activeFactor)
         const totalAcc = accMes.reduce((s, m) => s + m.accidentes, 0)
         return (
           <div className="fixed inset-0 z-[100] overflow-y-auto">
             <div className="no-print fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setInformeOpen(false)} />
             <div className="relative min-h-full flex flex-col items-center py-8 px-4">
               <div className="no-print sticky top-0 z-10 mb-4 flex items-center gap-3 bg-white rounded-2xl shadow-lg px-4 py-3">
-                <p className="text-sm font-semibold" style={{ color: COLORS.grayDark }}>Informe de {selected.name}</p>
+                <p className="text-sm font-semibold" style={{ color: COLORS.grayDark }}>Informe de {selected.name}{branch ? ` · ${branch.name}` : ''}</p>
                 <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-semibold hover:opacity-90" style={{ backgroundColor: COLORS.green }}>
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                   Guardar como PDF
@@ -303,8 +337,8 @@ export default function AdminPanel() {
                 </button>
               </div>
               <div className="bg-white rounded-xl shadow-2xl w-full max-w-[820px]">
-                <InformeReporte empresa={selected.name} docs={docsState} accidentes={totalAcc}
-                  indices={empresaIndices(selected.factor)} porArea={empresaAccidentesPorArea(selected.factor)} />
+                <InformeReporte empresa={branch ? `${selected.name} — ${branch.name}` : selected.name} docs={docsState} accidentes={totalAcc}
+                  indices={empresaIndices(activeFactor)} porArea={empresaAccidentesPorArea(activeFactor)} />
               </div>
             </div>
           </div>
@@ -329,7 +363,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 // ══════════════════════════ DASHBOARD DE LA EMPRESA ══════════════════════════
-function EmpresaDashboard({ empresa, docs }: { empresa: Empresa; docs: DocItem[] }) {
+function EmpresaDashboard({ factor, docs }: { factor: number; docs: DocItem[] }) {
   const total = docs.length
   const vig = docs.filter(d => d.status === 'valid').length
   const exp = docs.filter(d => d.status === 'expiring').length
@@ -340,12 +374,12 @@ function EmpresaDashboard({ empresa, docs }: { empresa: Empresa; docs: DocItem[]
   const urgente = docs.map(d => ({ ...d, days: daysTo(d.expiry) })).sort((a, b) => a.days - b.days)[0]
   const gaugeValue = urgente ? urgencyValue(urgente.days) : 0
 
-  const accMes = empresaAccidentesPorMes(empresa.factor)
-  const accArea = empresaAccidentesPorArea(empresa.factor)
-  const partes = empresaPartes(empresa.factor)
-  const idx = empresaIndices(empresa.factor)
+  const accMes = empresaAccidentesPorMes(factor)
+  const accArea = empresaAccidentesPorArea(factor)
+  const partes = empresaPartes(factor)
+  const idx = empresaIndices(factor)
   const totalAcc = accMes.reduce((s, m) => s + m.accidentes, 0)
-  const sinInvestigar = Math.max(0, Math.round(5 * empresa.factor))
+  const sinInvestigar = Math.max(0, Math.round(5 * factor))
   const parteHeat = (c: number) => c <= 0 ? COLORS.grayLight : c <= 2 ? '#C7E3AC' : c <= 4 ? COLORS.warn : COLORS.danger
   const partesList = Object.entries(partes).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1])
 

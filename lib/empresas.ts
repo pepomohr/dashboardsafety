@@ -1,5 +1,12 @@
 import { documents, DocItem, accidentesPorMes, accidentesPorArea, partesCuerpo, indices } from './mockData'
 
+export interface Sucursal {
+  id: string
+  name: string
+  severidad: number
+  factor: number
+}
+
 export interface Empresa {
   id: string
   name: string
@@ -11,10 +18,15 @@ export interface Empresa {
   logoUrl?: string     // /empresas/<slug>.png si existe; si no, monograma
   severidad: number    // 0 = impecable, 3 = con varios vencidos (para variar el dashboard)
   factor: number       // escala de accidentes para diferenciar empresas
+  sucursales?: Sucursal[]  // si la empresa tiene varias sedes con datos distintos
 }
 
 export const empresas: Empresa[] = [
-  { id: 'comafi',   name: 'Banco Comafi', slug: 'comafi', color: '#E2001A', rubro: 'Banca y servicios financieros', sede: 'CABA · Microcentro', isClient: true, logoUrl: '/comafi.png', severidad: 3, factor: 0.7 },
+  { id: 'comafi', name: 'Banco Comafi', slug: 'comafi', color: '#E2001A', rubro: 'Banca y servicios financieros', sede: '2 sucursales', isClient: true, logoUrl: '/comafi.png', severidad: 3, factor: 0.7,
+    sucursales: [
+      { id: 'lomas', name: 'Lomas de Zamora', severidad: 3, factor: 0.9 },
+      { id: 'ramos', name: 'Ramos Mejía',     severidad: 1, factor: 0.4 },
+    ] },
   { id: 'belgrano', name: 'Club Atlético y Social General Belgrano', slug: 'belgrano', color: '#1E9BD7', rubro: 'Club deportivo', sede: 'General Belgrano, Buenos Aires', isClient: false, logoUrl: '/escudo.png', severidad: 0, factor: 1.0 },
 ]
 
