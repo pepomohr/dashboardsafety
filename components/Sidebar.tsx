@@ -40,8 +40,8 @@ function NavList({ items, active, onPick }: { items: NavItem[]; active: string; 
   )
 }
 
-function Inner({ items, active, onPick, role, empresa }: {
-  items: NavItem[]; active: string; onPick: (id: string) => void; role?: string; empresa?: string
+function Inner({ items, active, onPick, role, empresa, extra }: {
+  items: NavItem[]; active: string; onPick: (id: string) => void; role?: string; empresa?: string; extra?: ReactNode
 }) {
   return (
     <>
@@ -57,6 +57,8 @@ function Inner({ items, active, onPick, role, empresa }: {
       </div>
 
       <NavList items={items} active={active} onPick={onPick} />
+
+      {extra && <div className="px-3 pb-2">{extra}</div>}
 
       <div className="p-3 border-t border-gray-100">
         <div className="flex items-center gap-2.5 px-2 py-1.5">
@@ -76,7 +78,7 @@ function Inner({ items, active, onPick, role, empresa }: {
 }
 
 export default function Sidebar({
-  items, active, onChange, role, empresa, open = false, onClose,
+  items, active, onChange, role, empresa, open = false, onClose, extra,
 }: {
   items: NavItem[]
   active: string
@@ -85,12 +87,13 @@ export default function Sidebar({
   empresa?: string
   open?: boolean
   onClose?: () => void
+  extra?: ReactNode
 }) {
   return (
     <>
       {/* Desktop */}
       <aside className="hidden md:flex flex-col w-56 flex-shrink-0 bg-white border-r border-gray-200 min-h-screen sticky top-0 self-start">
-        <Inner items={items} active={active} onPick={onChange} role={role} empresa={empresa} />
+        <Inner items={items} active={active} onPick={onChange} role={role} empresa={empresa} extra={extra} />
       </aside>
 
       {/* Mobile drawer */}
@@ -98,7 +101,7 @@ export default function Sidebar({
         <div className="md:hidden fixed inset-0 z-[60]">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
           <aside className="absolute left-0 top-0 bottom-0 w-64 bg-white shadow-2xl flex flex-col ss-animate">
-            <Inner items={items} active={active} onPick={(id) => { onChange(id); onClose?.() }} role={role} empresa={empresa} />
+            <Inner items={items} active={active} onPick={(id) => { onChange(id); onClose?.() }} role={role} empresa={empresa} extra={extra} />
           </aside>
         </div>
       )}

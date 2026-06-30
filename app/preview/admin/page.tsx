@@ -26,6 +26,7 @@ import InformeReporte from '@/components/InformeReporte'
 import Sidebar, { NavItem } from '@/components/Sidebar'
 import Logo from '@/components/Logo'
 import DemoSwitcher from '@/components/DemoSwitcher'
+import EnviarAppButton from '@/components/EnviarAppButton'
 
 const COLOR_SWATCHES = ['#E2001A', '#1E9BD7', '#F57C00', '#2E7D32', '#7E57C2', '#EC407A', '#00897B', '#3D3D3D']
 const DOC_TYPES = documents.map(d => d.name)
@@ -123,7 +124,8 @@ export default function AdminPanel() {
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: COLORS.bg }}>
       <Sidebar items={NAV} active="clientes" onChange={() => setSelected(null)} role="Administrador" empresa="Safety Services"
-        open={navOpen} onClose={() => setNavOpen(false)} />
+        open={navOpen} onClose={() => setNavOpen(false)}
+        extra={selected ? <EnviarAppButton slug={selected.slug} sucursal={branch?.id ?? undefined} /> : undefined} />
 
       <div className="flex-1 min-w-0 flex flex-col">
         {/* TOP BAR */}
@@ -237,10 +239,10 @@ export default function AdminPanel() {
               )}
 
               {/* Tabs */}
-              <div className="flex gap-2 border-b border-gray-200">
-                {([['dashboard', 'Dashboard'], ['accidentes', 'Carga de accidentes'], ['carga', 'Carga de documentación']] as const).map(([id, label]) => (
+              <div className="flex gap-1 sm:gap-2 border-b border-gray-200">
+                {([['dashboard', 'Dashboard'], ['accidentes', 'Accidentes'], ['carga', 'Documentación']] as const).map(([id, label]) => (
                   <button key={id} onClick={() => setTab(id)}
-                    className="px-4 py-2.5 text-sm font-semibold -mb-px border-b-2 transition-colors"
+                    className="px-2.5 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold -mb-px border-b-2 transition-colors whitespace-nowrap"
                     style={tab === id
                       ? { borderColor: COLORS.green, color: COLORS.greenDark }
                       : { borderColor: 'transparent', color: COLORS.gray }}>

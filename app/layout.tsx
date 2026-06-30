@@ -15,8 +15,11 @@ export const metadata: Metadata = {
     title: "Safety Services",
   },
   icons: {
-    icon: "/icon.svg",
-    apple: "/icon.svg",
+    icon: [
+      { url: "/logo.pc_favicon.png", type: "image/png" },
+      { url: "/logo-android192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: "/logo-apple.png",
   },
 };
 

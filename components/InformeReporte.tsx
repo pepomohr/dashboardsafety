@@ -42,7 +42,7 @@ export default function InformeReporte({
   const hoy = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })
 
   return (
-    <div id="informe" className="bg-white text-left" style={{ padding: 36, maxWidth: 800, margin: '0 auto', color: COLORS.grayDark }}>
+    <div id="informe" className="bg-white text-left p-5 sm:p-9" style={{ maxWidth: 800, width: '100%', margin: '0 auto', color: COLORS.grayDark }}>
       {/* Encabezado */}
       <div className="flex items-start justify-between pb-4 mb-5" style={{ borderBottom: `3px solid ${COLORS.green}` }}>
         <div className="flex items-center gap-3">
@@ -74,7 +74,12 @@ export default function InformeReporte({
           </div>
         ))}
       </div>
-      <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>
+      <table className="w-full text-sm" style={{ borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+        <colgroup>
+          <col style={{ width: '56%' }} />
+          <col style={{ width: '22%' }} />
+          <col style={{ width: '22%' }} />
+        </colgroup>
         <thead>
           <tr style={{ backgroundColor: COLORS.bg }}>
             <th className="text-left py-1.5 px-2" style={{ color: COLORS.gray, fontSize: 11 }}>DOCUMENTO</th>
@@ -87,7 +92,7 @@ export default function InformeReporte({
             const s = statusStyle(d.status)
             return (
               <tr key={d.id} style={{ borderBottom: '1px solid #eee' }}>
-                <td className="py-1.5 px-2">{d.name}</td>
+                <td className="py-1.5 px-2" style={{ wordBreak: 'break-word' }}>{d.name}</td>
                 <td className="py-1.5 px-2" style={{ color: COLORS.gray }}>{d.expiry.split('-').reverse().join('/')}</td>
                 <td className="py-1.5 px-2">
                   <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: s.bg, color: s.text }}>{s.label}</span>
@@ -100,7 +105,7 @@ export default function InformeReporte({
 
       {/* Siniestralidad */}
       <h2 className="font-display text-base font-bold mt-6 mb-2" style={{ color: COLORS.greenDark }}>2 · Resumen de siniestralidad</h2>
-      <div className="grid grid-cols-4 gap-3 mb-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
         {[['Accidentes', accidentes], ['Frecuencia', indices.frecuencia.toFixed(2)], ['Gravedad', indices.gravedad.toFixed(2)], ['Incidencia', indices.incidencia.toFixed(2)]].map(([l, v]) => (
           <div key={l as string} className="rounded-lg p-3" style={{ border: '1px solid #eee' }}>
             <p className="text-lg font-bold">{v as any}</p>
