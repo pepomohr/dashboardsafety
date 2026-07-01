@@ -361,11 +361,9 @@ export default function PreviewClienteDashboard() {
               </div>
 
               {/* Índices */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 {[
                   { label: 'Accidentes acumulados', value: totalAccidentesF, sub: periodoLabel, color: COLORS.grayDark },
-                  { label: 'Índice de frecuencia',  value: idxF.frecuencia.toFixed(2), sub: 'por horas-hombre', color: COLORS.danger },
-                  { label: 'Índice de gravedad',    value: idxF.gravedad.toFixed(2),  sub: 'días / horas-hombre', color: COLORS.green },
                   { label: 'Índice de incidencia',  value: idxF.incidencia.toFixed(2), sub: 'accidentes con baja', color: COLORS.warn },
                 ].map(k => (
                   <div key={k.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 border-l-4" style={{ borderLeftColor: k.color }}>
@@ -376,64 +374,25 @@ export default function PreviewClienteDashboard() {
                 ))}
               </div>
 
-              {/* Fila: línea de tiempo + investigación */}
-              <div className="grid lg:grid-cols-3 gap-5">
-                <Card title="Accidentes por mes" className="lg:col-span-2"
-                  action={<span className="text-xs px-2.5 py-1 rounded-full font-semibold" style={{ backgroundColor: COLORS.greenLight, color: COLORS.greenDark }}>Pico: {mesMax.mes} ({mesMax.accidentes})</span>}>
-                  <ResponsiveContainer width="100%" height={260}>
-                    <AreaChart data={mesesData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="gAcc" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor={COLORS.green} stopOpacity={0.4} />
-                          <stop offset="100%" stopColor={COLORS.green} stopOpacity={0.02} />
-                        </linearGradient>
-                        <linearGradient id="gInc" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor={COLORS.grayMid} stopOpacity={0.25} />
-                          <stop offset="100%" stopColor={COLORS.grayMid} stopOpacity={0.02} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false} />
-                      <XAxis dataKey="mes" tick={{ fontSize: 12, fill: COLORS.gray }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 12, fill: COLORS.gray }} axisLine={false} tickLine={false} allowDecimals={false} />
-                      <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #eee', fontSize: 13 }} />
-                      <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Area type="monotone" dataKey="incidentes" name="Incidentes" stroke={COLORS.grayMid} fill="url(#gInc)" strokeWidth={2} />
-                      <Area type="monotone" dataKey="accidentes" name="Accidentes" stroke={COLORS.green} fill="url(#gAcc)" strokeWidth={2.5} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </Card>
-
-                <Card title="Estado de la documentación"
-                  action={<span className="text-xs px-2.5 py-1 rounded-full font-semibold" style={{ backgroundColor: COLORS.greenLight, color: COLORS.greenDark }}>{total} docs</span>}>
-                  <div className="relative flex items-center justify-center">
-                    <ResponsiveContainer width="100%" height={200}>
-                      <PieChart>
-                        <Pie data={docStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={52} outerRadius={78} paddingAngle={3}>
-                          {docStatusData.map((e, i) => <Cell key={i} fill={e.color} />)}
-                        </Pie>
-                        <Tooltip formatter={(v) => `${v} ${v === 1 ? 'documento' : 'documentos'}`} contentStyle={{ borderRadius: 12, border: '1px solid #eee', fontSize: 13 }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="absolute flex flex-col items-center pointer-events-none">
-                      <span className="text-3xl font-bold" style={{ color: COLORS.grayDark }}>{vig}</span>
-                      <span className="text-[10px]" style={{ color: COLORS.gray }}>vigentes</span>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5 mt-2">
-                    {docStatusData.map(e => (
-                      <div key={e.name} className="flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-2" style={{ color: COLORS.grayDark }}>
-                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: e.color }} />
-                          {e.name}
-                        </span>
-                        <span className="font-bold" style={{ color: COLORS.grayDark }}>
-                          {e.value} <span className="text-xs font-normal" style={{ color: COLORS.gray }}>({Math.round((e.value / total) * 100)}%)</span>
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              </div>
+              {/* Accidentes por mes (solo accidentes) */}
+              <Card title="Accidentes por mes"
+                action={<span className="text-xs px-2.5 py-1 rounded-full font-semibold" style={{ backgroundColor: COLORS.greenLight, color: COLORS.greenDark }}>Pico: {mesMax.mes} ({mesMax.accidentes})</span>}>
+                <ResponsiveContainer width="100%" height={260}>
+                  <AreaChart data={mesesData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="gAcc" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={COLORS.green} stopOpacity={0.4} />
+                        <stop offset="100%" stopColor={COLORS.green} stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false} />
+                    <XAxis dataKey="mes" tick={{ fontSize: 12, fill: COLORS.gray }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 12, fill: COLORS.gray }} axisLine={false} tickLine={false} allowDecimals={false} />
+                    <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #eee', fontSize: 13 }} />
+                    <Area type="monotone" dataKey="accidentes" name="Accidentes" stroke={COLORS.green} fill="url(#gAcc)" strokeWidth={2.5} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </Card>
 
               {/* Fila: área + turno + tipo de lesión */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -484,7 +443,7 @@ export default function PreviewClienteDashboard() {
               </div>
 
               {/* Índice de siniestralidad comparado */}
-              <Card title="Índice de siniestralidad — cliente vs. límite admisible"
+              <Card title="Índice de incidencia — cliente vs. límite admisible"
                 action={<span className="text-xs px-2.5 py-1 rounded-full font-semibold" style={{ backgroundColor: '#FBE9E5', color: '#9A2A18' }}>Límite: 0,30</span>}>
                 <ResponsiveContainer width="100%" height={220}>
                   <LineChart data={indiceComparado} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>

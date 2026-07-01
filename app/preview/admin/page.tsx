@@ -401,11 +401,9 @@ function EmpresaDashboard({ factor, docs }: { factor: number; docs: DocItem[] })
       )}
 
       {/* Índices */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         {[
           { label: 'Accidentes acumulados', value: totalAcc, color: COLORS.grayDark },
-          { label: 'Índice de frecuencia', value: idx.frecuencia.toFixed(2), color: COLORS.danger },
-          { label: 'Índice de gravedad', value: idx.gravedad.toFixed(2), color: COLORS.green },
           { label: 'Índice de incidencia', value: idx.incidencia.toFixed(2), color: COLORS.warn },
         ].map(k => (
           <div key={k.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 border-l-4" style={{ borderLeftColor: k.color }}>
@@ -430,8 +428,6 @@ function EmpresaDashboard({ factor, docs }: { factor: number; docs: DocItem[] })
               <XAxis dataKey="mes" tick={{ fontSize: 12, fill: COLORS.gray }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 12, fill: COLORS.gray }} axisLine={false} tickLine={false} allowDecimals={false} />
               <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #eee', fontSize: 13 }} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Area type="monotone" dataKey="incidentes" name="Incidentes" stroke={COLORS.grayMid} fill="none" strokeWidth={2} strokeDasharray="4 3" />
               <Area type="monotone" dataKey="accidentes" name="Accidentes" stroke={COLORS.green} fill="url(#aMes)" strokeWidth={2.5} />
             </AreaChart>
           </ResponsiveContainer>
@@ -517,7 +513,7 @@ function EmpresaDashboard({ factor, docs }: { factor: number; docs: DocItem[] })
           action={<span className="text-xs px-2.5 py-1 rounded-full font-semibold" style={{ backgroundColor: '#FBE9E5', color: '#9A2A18' }}>{sinInvestigar} sin investigar</span>}>
           <Donut data={investigacion.map(e => ({ label: e.estado, value: e.valor }))} />
         </Card>
-        <Card title="Índice de siniestralidad — vs. límite admisible" className="lg:col-span-2"
+        <Card title="Índice de incidencia — vs. límite admisible" className="lg:col-span-2"
           action={<span className="text-xs px-2.5 py-1 rounded-full font-semibold" style={{ backgroundColor: '#FBE9E5', color: '#9A2A18' }}>Límite: 0,30</span>}>
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={indiceComparado} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
