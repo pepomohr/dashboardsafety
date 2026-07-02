@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   PieChart, Pie, AreaChart, Area, CartesianGrid, Legend, LabelList,
@@ -13,6 +13,10 @@ import {
   gravedadLesiones, circunstancia, causas, origen, accidentesPorPuesto,
   diasPerdidos, indiceComparado,
 } from '@/lib/mockData'
+import {
+  empresas, empresaDocs, empresaPartes,
+  empresaAccidentesPorMes, empresaAccidentesPorArea, empresaIndices,
+} from '@/lib/empresas'
 import Gauge from '@/components/Gauge'
 import BodyMap2 from '@/components/BodyMap2'
 import Sidebar, { NavItem } from '@/components/Sidebar'
@@ -96,16 +100,41 @@ export default function PreviewClienteDashboard() {
   const [navOpen, setNavOpen] = useState(false)
   const [informeOpen, setInformeOpen] = useState(false)
 
+  // Cliente del link (?empresa=comafi&sucursal=lomas). Sin parámetro → demo.
+  const [empSlug, setEmpSlug] = useState<string | null>(null)
+  const [sucId, setSucId] = useState<string | null>(null)
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search)
+    let e = p.get('empresa'), s = p.get('sucursal')
+    // El link fija el cliente y lo recordamos (para cuando abran la app instalada sin el parámetro)
+    if (e) { try { localStorage.setItem('ss_empresa', e); localStorage.setItem('ss_sucursal', s || '') } catch {} }
+    else { try { e = localStorage.getItem('ss_empresa'); s = localStorage.getItem('ss_sucursal') } catch {} }
+    setEmpSlug(e)
+    setSucId(s || null)
+  }, [])
+  const emp = empresas.find(e => e.slug === empSlug) ?? null
+  const branch = emp?.sucursales?.find(s => s.id === sucId) ?? emp?.sucursales?.[0] ?? null
+  const factor = branch?.factor ?? emp?.factor ?? 1
+  const severidad = branch?.severidad ?? emp?.severidad ?? 0
+  const empresaName = emp ? (branch ? `${emp.name} · ${branch.name}` : emp.name) : 'Empresa Demo S.A.'
+
+  // Fuentes de datos: las del cliente del link, o el demo por defecto
+  const docsSource = emp ? empresaDocs(severidad) : documents
+  const partesSource = emp ? empresaPartes(factor) : partesCuerpo
+  const mesSource = emp ? empresaAccidentesPorMes(factor) : accidentesPorMes
+  const areaSource = emp ? empresaAccidentesPorArea(factor) : accidentesPorArea
+  const indicesSource = emp ? empresaIndices(factor) : indices
+
   // Conteo documental
-  const vig = documents.filter(d => d.status === 'valid').length
-  const exp = documents.filter(d => d.status === 'expiring').length
-  const ven = documents.filter(d => d.status === 'expired').length
-  const total = documents.length
+  const vig = docsSource.filter(d => d.status === 'valid').length
+  const exp = docsSource.filter(d => d.status === 'expiring').length
+  const ven = docsSource.filter(d => d.status === 'expired').length
+  const total = docsSource.length
 
   // El velocímetro muestra SIEMPRE el documento más urgente
   const today = new Date()
   const daysTo = (iso: string) => Math.round((new Date(iso + 'T00:00:00').getTime() - today.getTime()) / 86400000)
-  const docsConDias = documents.map(d => ({ ...d, days: daysTo(d.expiry) }))
+  const docsConDias = docsSource.map(d => ({ ...d, days: daysTo(d.expiry) }))
   const urgente = docsConDias.slice().sort((a, b) => a.days - b.days)[0]
   // Avisos reales para la campanita: vencidos + próximos a vencer (≤30 días)
   const alertas = docsConDias.filter(d => d.days <= 30).sort((a, b) => a.days - b.days)
@@ -119,7 +148,6 @@ export default function PreviewClienteDashboard() {
   }
   const gaugeValue = urgencyValue(urgente.days)
 
-  const totalAccidentes = accidentesPorMes.reduce((s, m) => s + m.accidentes, 0)
   const INVEST_COLORS = [COLORS.green, COLORS.warn, COLORS.danger]
 
   // ── Filtros funcionales (año / mes / rango) ──
@@ -127,7 +155,7 @@ export default function PreviewClienteDashboard() {
   const scale = (n: number) => Math.round(n * yearFactor)
   const mDesde = desde ? Number(desde.slice(5, 7)) : null
   const mHasta = hasta ? Number(hasta.slice(5, 7)) : null
-  const mesesData = accidentesPorMes
+  const mesesData = mesSource
     .map(m => ({ mes: m.mes, accidentes: scale(m.accidentes), incidentes: scale(m.incidentes) }))
     .filter((_, i) => {
       const mn = i + 1
@@ -138,12 +166,12 @@ export default function PreviewClienteDashboard() {
     })
   const totalAccidentesF = mesesData.reduce((s, m) => s + m.accidentes, 0)
   const mesMax = mesesData.length ? mesesData.reduce((a, b) => (b.accidentes > a.accidentes ? b : a)) : { mes: '—', accidentes: 0 }
-  const areaData = accidentesPorArea.map(a => ({ area: a.area, valor: scale(a.valor) }))
-  const partesData = Object.fromEntries(Object.entries(partesCuerpo).map(([k, v]) => [k, scale(v)])) as Record<string, number>
+  const areaData = areaSource.map(a => ({ area: a.area, valor: scale(a.valor) }))
+  const partesData = Object.fromEntries(Object.entries(partesSource).map(([k, v]) => [k, scale(v)])) as Record<string, number>
   const idxF = {
-    frecuencia: +(indices.frecuencia * yearFactor).toFixed(2),
-    gravedad: +(indices.gravedad * yearFactor).toFixed(2),
-    incidencia: +(indices.incidencia * yearFactor).toFixed(2),
+    frecuencia: +(indicesSource.frecuencia * yearFactor).toFixed(2),
+    gravedad: +(indicesSource.gravedad * yearFactor).toFixed(2),
+    incidencia: +(indicesSource.incidencia * yearFactor).toFixed(2),
   }
   const periodoLabel = mes > 0 ? MESES_FULL[mes] : (mDesde || mHasta) ? 'Período filtrado' : `Año ${anio}`
 
@@ -202,7 +230,7 @@ export default function PreviewClienteDashboard() {
   const docListCard = (
     <Card title="Documentación — detalle">
       <div className="space-y-1">
-        {documents.map(doc => {
+        {docsSource.map(doc => {
           const s = statusStyle(doc.status)
           return (
             <div key={doc.id} className="flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-gray-50 transition-colors">
@@ -244,7 +272,7 @@ export default function PreviewClienteDashboard() {
 
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: COLORS.bg }}>
-      <Sidebar items={navItems} active={view} onChange={setView} role="Cliente" empresa="Empresa Demo S.A."
+      <Sidebar items={navItems} active={view} onChange={setView} role="Cliente" empresa={empresaName}
         open={navOpen} onClose={() => setNavOpen(false)} />
 
       <div className="flex-1 min-w-0 flex flex-col">
@@ -264,7 +292,7 @@ export default function PreviewClienteDashboard() {
                 <h1 className="font-display font-extrabold text-lg leading-none" style={{ color: COLORS.grayDark }}>
                   {view === 'dashboard' ? 'Dashboard' : 'Documentación'}
                 </h1>
-                <p className="text-xs mt-1" style={{ color: COLORS.gray }}>Empresa Demo S.A.</p>
+                <p className="text-xs mt-1" style={{ color: COLORS.gray }}>{empresaName}</p>
               </div>
             </div>
 
@@ -560,9 +588,8 @@ export default function PreviewClienteDashboard() {
             </div>
             {/* Hoja del informe */}
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-[820px]">
-              <InformeReporte empresa="Empresa Demo S.A." docs={documents} accidentes={totalAccidentes}
-                indices={{ frecuencia: indices.frecuencia, gravedad: indices.gravedad, incidencia: indices.incidencia }}
-                porArea={accidentesPorArea} />
+              <InformeReporte empresa={empresaName} docs={docsSource} accidentes={totalAccidentesF}
+                indices={idxF} porArea={areaData} />
             </div>
           </div>
         </div>
