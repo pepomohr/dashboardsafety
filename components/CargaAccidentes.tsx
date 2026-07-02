@@ -157,7 +157,7 @@ export default function CargaAccidentes({ color }: { color: string }) {
   const canSave = modo === 'form' ? (fecha && parteKey && lesion) : (fecha && tallyTotal > 0)
 
   return (
-    <div className="grid lg:grid-cols-5 gap-5 items-start">
+    <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 items-start">
       <div className="lg:col-span-3">
         <Card>
           {/* Switch + importar */}

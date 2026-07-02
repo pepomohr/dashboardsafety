@@ -460,7 +460,7 @@ export default function PreviewClienteDashboard() {
               </Card>
 
               {/* Días perdidos + accidentes por puesto */}
-              <div className="grid lg:grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 <Card title="Días perdidos por accidente">
                   <ResponsiveContainer width="100%" height={220}>
                     <LineChart data={diasPerdidos} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -489,7 +489,7 @@ export default function PreviewClienteDashboard() {
               </div>
 
               {/* Fila: cuerpo + documental */}
-              <div className="grid lg:grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 <Card title="Partes del cuerpo afectadas">
                   <div className="flex flex-col sm:flex-row gap-4 items-start">
                     <div className="flex-1 min-w-0 w-full">
@@ -525,9 +525,9 @@ export default function PreviewClienteDashboard() {
 
           {/* ══════════════ VISTA DOCUMENTACIÓN ══════════════ */}
           {view === 'documentacion' && (
-            <div key="docs" className="ss-animate grid lg:grid-cols-3 gap-5 items-start">
-              <div className="lg:col-span-1">{documentalCard}</div>
-              <div className="lg:col-span-2">{docListCard}</div>
+            <div key="docs" className="ss-animate grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+              <div className="min-w-0 lg:col-span-1">{documentalCard}</div>
+              <div className="min-w-0 lg:col-span-2">{docListCard}</div>
             </div>
           )}
 

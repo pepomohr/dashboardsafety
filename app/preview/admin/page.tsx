@@ -414,7 +414,7 @@ function EmpresaDashboard({ factor, docs }: { factor: number; docs: DocItem[] })
       </div>
 
       {/* Mes + documental */}
-      <div className="grid lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <Card title="Accidentes por mes" className="lg:col-span-2">
           <ResponsiveContainer width="100%" height={240}>
             <AreaChart data={accMes} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -508,7 +508,7 @@ function EmpresaDashboard({ factor, docs }: { factor: number; docs: DocItem[] })
       </div>
 
       {/* Investigación + índice comparado — solo admin */}
-      <div className="grid lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <Card title="Investigación de accidentes"
           action={<span className="text-xs px-2.5 py-1 rounded-full font-semibold" style={{ backgroundColor: '#FBE9E5', color: '#9A2A18' }}>{sinInvestigar} sin investigar</span>}>
           <Donut data={investigacion.map(e => ({ label: e.estado, value: e.valor }))} />
@@ -531,7 +531,7 @@ function EmpresaDashboard({ factor, docs }: { factor: number; docs: DocItem[] })
       </div>
 
       {/* Días perdidos + puesto */}
-      <div className="grid lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <Card title="Días perdidos por accidente">
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={diasPerdidos} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -599,7 +599,7 @@ function CargaDocumentacion({
   color: string
 }) {
   return (
-    <div className="grid lg:grid-cols-5 gap-5 items-start">
+    <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 items-start">
       {/* Form */}
       <div className="lg:col-span-2">
         <Card title="Cargar documento">
