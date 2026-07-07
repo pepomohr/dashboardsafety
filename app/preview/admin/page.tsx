@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   AreaChart, Area, CartesianGrid, Legend, PieChart, Pie, LineChart, Line, ReferenceLine, LabelList,
@@ -15,6 +15,7 @@ import {
   empresas as seedEmpresas, Empresa,
   empresaDocs, empresaAccidentesPorMes, empresaAccidentesPorArea, empresaPartes, empresaIndices,
 } from '@/lib/empresas'
+import { uploadLogo, supabaseReady } from '@/lib/supabase'
 import Card from '@/components/Card'
 import Gauge from '@/components/Gauge'
 import BodyMap2 from '@/components/BodyMap2'
@@ -70,6 +71,18 @@ export default function AdminPanel() {
   const [fSede, setFSede] = useState('')
   const [fColor, setFColor] = useState(COLOR_SWATCHES[0])
   const [fClient, setFClient] = useState(true)
+  const [fLogo, setFLogo] = useState<string | null>(null)       // vista previa (data URL)
+  const [fLogoFile, setFLogoFile] = useState<File | null>(null) // archivo real (para subir a Supabase)
+  const [creando, setCreando] = useState(false)
+
+  function onLogoFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setFLogoFile(file)
+    const reader = new FileReader()
+    reader.onload = () => setFLogo(String(reader.result))
+    reader.readAsDataURL(file)
+  }
 
   function enterEmpresa(e: Empresa) {
     setSelected(e)
@@ -91,17 +104,25 @@ export default function AdminPanel() {
   const branch = selected?.sucursales?.find(s => s.id === sucursalId) ?? null
   const activeFactor = branch?.factor ?? selected?.factor ?? 1
 
-  function crearEmpresa() {
-    if (!fName.trim()) return
-    const slug = fName.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  async function crearEmpresa() {
+    if (!fName.trim() || creando) return
+    setCreando(true)
+    const slug = (fName.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')) || `e${Date.now()}`
+    // El logo: si Supabase está conectado, se sube al Storage; si no, se usa la vista previa local.
+    let logoUrl: string | undefined = fLogo || undefined
+    if (fLogoFile && supabaseReady) {
+      const url = await uploadLogo(fLogoFile, slug)
+      if (url) logoUrl = url
+    }
     const nueva: Empresa = {
-      id: slug || `e${Date.now()}`, name: fName.trim(), slug: slug || `e${Date.now()}`,
+      id: slug, name: fName.trim(), slug,
       color: fColor, rubro: fRubro.trim() || 'Sin especificar', sede: fSede.trim() || 'Sin sede', isClient: fClient,
-      severidad: 0, factor: 1,
+      logoUrl, severidad: 0, factor: 1,
     }
     setEmpresasList(l => [nueva, ...l])
     setCreateOpen(false)
-    setFName(''); setFRubro(''); setFSede(''); setFColor(COLOR_SWATCHES[0]); setFClient(true)
+    setFName(''); setFRubro(''); setFSede(''); setFColor(COLOR_SWATCHES[0]); setFClient(true); setFLogo(null); setFLogoFile(null)
+    setCreando(false)
   }
 
   // Form de carga de documento
@@ -298,23 +319,46 @@ export default function AdminPanel() {
                   ))}
                 </div>
               </Field>
+              <Field label="Logo del cliente (opcional)">
+                <div className="flex items-center gap-3">
+                  {fLogo ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={fLogo} alt="logo" className="w-12 h-12 rounded-lg object-contain bg-white border border-gray-100 flex-shrink-0" />
+                  ) : (
+                    <div className="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold flex-shrink-0" style={{ backgroundColor: fColor }}>
+                      {(fName || 'C').charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <label className="cursor-pointer px-3 py-2 rounded-xl text-sm font-semibold border transition-colors hover:bg-gray-50" style={{ borderColor: '#e5e7eb', color: COLORS.grayDark }}>
+                    {fLogo ? 'Cambiar imagen' : 'Subir imagen'}
+                    <input type="file" accept="image/*" className="hidden" onChange={onLogoFile} />
+                  </label>
+                  {fLogo && <button type="button" onClick={() => { setFLogo(null); setFLogoFile(null) }} className="text-xs" style={{ color: COLORS.gray }}>Quitar</button>}
+                </div>
+              </Field>
               <label className="flex items-center gap-2.5 cursor-pointer">
                 <input type="checkbox" checked={fClient} onChange={e => setFClient(e.target.checked)} className="w-4 h-4 accent-green-700" />
                 <span className="text-sm" style={{ color: COLORS.grayDark }}>Marcar como cliente oficial</span>
               </label>
               {/* Preview mini */}
               <div className="rounded-xl overflow-hidden border border-gray-100">
-                <div className="px-4 py-3" style={{ background: `linear-gradient(135deg, ${fColor}, ${fColor})` }}>
-                  <p className="text-[10px] italic font-semibold" style={{ color: 'rgba(255,255,255,.85)' }}>
-                    {fClient ? 'CLIENTE OFICIAL DE SAFETY SERVICES' : 'PROSPECTO · DEMO'}
-                  </p>
-                  <p className="font-display text-white font-extrabold">{fName || 'Nombre de la empresa'}</p>
+                <div className="px-4 py-3 flex items-center gap-3" style={{ backgroundColor: fColor }}>
+                  {fLogo && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={fLogo} alt="logo" className="w-10 h-10 rounded-lg object-contain bg-white/90 p-0.5 flex-shrink-0" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-[10px] italic font-semibold" style={{ color: 'rgba(255,255,255,.85)' }}>
+                      {fClient ? 'CLIENTE OFICIAL DE SAFETY SERVICES' : 'PROSPECTO · DEMO'}
+                    </p>
+                    <p className="font-display text-white font-extrabold truncate">{fName || 'Nombre de la empresa'}</p>
+                  </div>
                 </div>
               </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
               <button onClick={() => setCreateOpen(false)} className="px-4 py-2 rounded-xl text-sm font-semibold border border-gray-200" style={{ color: COLORS.gray }}>Cancelar</button>
-              <button onClick={crearEmpresa} className="px-4 py-2 rounded-xl text-white text-sm font-semibold" style={{ backgroundColor: COLORS.green }}>Crear cliente</button>
+              <button onClick={crearEmpresa} disabled={creando} className="px-4 py-2 rounded-xl text-white text-sm font-semibold disabled:opacity-60" style={{ backgroundColor: COLORS.green }}>{creando ? 'Creando…' : 'Crear cliente'}</button>
             </div>
           </div>
         </div>
