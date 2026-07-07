@@ -191,12 +191,20 @@ export default function PreviewClienteDashboard() {
     <Card title="Estado de la documentación"
       action={<span className="text-xs px-2.5 py-1 rounded-full font-semibold" style={{ backgroundColor: COLORS.greenLight, color: COLORS.greenDark }}>{vig}/{total} vigentes</span>}>
       <div className="flex flex-col items-center">
-        <Gauge value={gaugeValue} size={240} />
+        {/* Barra de proporción — estado general de vigencia */}
+        <div className="w-full mb-3">
+          <div className="flex h-6 w-full rounded-full overflow-hidden" style={{ backgroundColor: COLORS.grayLight }}>
+            {vig > 0 && <div style={{ width: `${(vig / total) * 100}%`, backgroundColor: COLORS.green }} />}
+            {exp > 0 && <div style={{ width: `${(exp / total) * 100}%`, backgroundColor: COLORS.warn }} />}
+            {ven > 0 && <div style={{ width: `${(ven / total) * 100}%`, backgroundColor: COLORS.danger }} />}
+          </div>
+          <p className="text-center text-sm font-bold mt-2" style={{ color: COLORS.grayDark }}>{vig} de {total} documentos vigentes</p>
+        </div>
         {(() => {
           const us = statusStyle(urgente.status)
           const venc = urgente.days < 0
           return (
-            <div className="w-full rounded-xl px-4 py-3 -mt-1 text-center" style={{ backgroundColor: us.bg }}>
+            <div className="w-full rounded-xl px-4 py-3 text-center" style={{ backgroundColor: us.bg }}>
               <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: us.text }}>
                 {venc ? '⚠ Requiere atención' : 'Próximo a vencer'}
               </p>
@@ -232,15 +240,23 @@ export default function PreviewClienteDashboard() {
       <div className="space-y-1">
         {docsSource.map(doc => {
           const s = statusStyle(doc.status)
+          const d2 = daysTo(doc.expiry)
+          // Barra de vigencia: cuánta "vida" le queda al documento (365 días = lleno)
+          const barPct = doc.status === 'expired' ? 100 : Math.max(5, Math.min(100, Math.round((d2 / 365) * 100)))
           return (
             <div key={doc.id} className="flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-gray-50 transition-colors">
               <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.hex }} />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium truncate" style={{ color: COLORS.grayDark }}>{doc.name}</p>
                 <p className="text-xs" style={{ color: COLORS.gray }}>
-                  {doc.status === 'expired' ? 'Venció' : 'Vence'} el {doc.expiry.split('-').reverse().join('/')}
+                  {doc.status === 'expired' ? `Venció hace ${Math.abs(d2)} días` : d2 === 0 ? 'Vence hoy' : `Vence en ${d2} días`}
+                  {' · '}{doc.expiry.split('-').reverse().join('/')}
                   {doc.note && ` · ${doc.note}`}
                 </p>
+                {/* Barra de vigencia del documento */}
+                <div className="mt-1.5 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: COLORS.grayLight }}>
+                  <div className="h-full rounded-full" style={{ width: `${barPct}%`, backgroundColor: s.hex }} />
+                </div>
               </div>
               {doc.pct !== undefined && (
                 <div className="hidden sm:flex items-center gap-2 w-28">

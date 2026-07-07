@@ -436,11 +436,19 @@ function EmpresaDashboard({ factor, docs }: { factor: number; docs: DocItem[] })
         <Card title="Estado de la documentación"
           action={<span className="text-xs px-2.5 py-1 rounded-full font-semibold" style={{ backgroundColor: COLORS.greenLight, color: COLORS.greenDark }}>{vig}/{total}</span>}>
           <div className="flex flex-col items-center">
-            <Gauge value={gaugeValue} size={210} />
+            {/* Barra de proporción — estado general de vigencia */}
+            <div className="w-full mb-3">
+              <div className="flex h-6 w-full rounded-full overflow-hidden" style={{ backgroundColor: COLORS.grayLight }}>
+                {vig > 0 && <div style={{ width: `${(vig / total) * 100}%`, backgroundColor: COLORS.green }} />}
+                {exp > 0 && <div style={{ width: `${(exp / total) * 100}%`, backgroundColor: COLORS.warn }} />}
+                {ven > 0 && <div style={{ width: `${(ven / total) * 100}%`, backgroundColor: COLORS.danger }} />}
+              </div>
+              <p className="text-center text-sm font-bold mt-2" style={{ color: COLORS.grayDark }}>{vig} de {total} documentos vigentes</p>
+            </div>
             {urgente && (() => {
               const us = statusStyle(urgente.status); const venc = urgente.days < 0
               return (
-                <div className="w-full rounded-xl px-3 py-2.5 text-center -mt-1" style={{ backgroundColor: us.bg }}>
+                <div className="w-full rounded-xl px-3 py-2.5 text-center" style={{ backgroundColor: us.bg }}>
                   <p className="text-xs font-semibold" style={{ color: us.text }}>{urgente.name}</p>
                   <p className="text-[11px]" style={{ color: us.text }}>{venc ? `Venció hace ${Math.abs(urgente.days)} días` : `Vence en ${urgente.days} días`}</p>
                 </div>
