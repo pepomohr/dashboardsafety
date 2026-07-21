@@ -10,6 +10,26 @@ export const supabase: SupabaseClient | null =
 
 export const supabaseReady = !!supabase
 
+// ── Autenticación ──
+export async function signIn(email: string, password: string) {
+  if (!supabase) return { error: 'Supabase no está configurado.' }
+  const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+  return { error: error?.message ?? null }
+}
+
+export async function signOut() {
+  await supabase?.auth.signOut()
+}
+
+/** Devuelve el perfil del usuario logueado ({ role, empresa_id }) o null si no hay sesión. */
+export async function getProfile(): Promise<{ role: string; empresa_id: string | null } | null> {
+  if (!supabase) return null
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  const { data } = await supabase.from('profiles').select('role, empresa_id').eq('id', user.id).single()
+  return data ? { role: data.role, empresa_id: data.empresa_id } : { role: 'cliente', empresa_id: null }
+}
+
 /**
  * Sube un logo de empresa al bucket "logos" y devuelve su URL pública.
  * Si Supabase todavía no está conectado, devuelve null (se usa la vista previa local).

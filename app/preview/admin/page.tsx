@@ -15,7 +15,8 @@ import {
   empresas as seedEmpresas, Empresa,
   empresaDocs, empresaAccidentesPorMes, empresaAccidentesPorArea, empresaPartes, empresaIndices,
 } from '@/lib/empresas'
-import { uploadLogo, supabaseReady } from '@/lib/supabase'
+import { supabase, uploadLogo, supabaseReady, signOut } from '@/lib/supabase'
+import LoginGate from '@/components/LoginGate'
 import Card from '@/components/Card'
 import Gauge from '@/components/Gauge'
 import BodyMap2 from '@/components/BodyMap2'
@@ -54,7 +55,34 @@ function urgencyValue(days: number) {
   return 0
 }
 
-export default function AdminPanel() {
+// Parámetros de demo para el dashboard (mientras no estén migrados docs/accidentes reales)
+const DEMO_PARAMS: Record<string, { severidad: number; factor: number }> = {
+  comafi: { severidad: 3, factor: 0.7 },
+  belgrano: { severidad: 0, factor: 1 },
+}
+function sucParams(name: string) {
+  const n = (name || '').toLowerCase()
+  if (n.includes('lomas')) return { severidad: 3, factor: 0.9 }
+  if (n.includes('ramos')) return { severidad: 1, factor: 0.4 }
+  return { severidad: 0, factor: 1 }
+}
+// Convierte una fila de la base (empresas) a nuestro tipo Empresa
+function dbToEmpresa(e: any, sucs: any[] = []): Empresa {
+  const demo = DEMO_PARAMS[e.slug] || { severidad: 0, factor: 1 }
+  return {
+    id: e.id, name: e.name, slug: e.slug, color: e.color || '#6FB63F',
+    rubro: e.rubro || 'Sin especificar', sede: e.sede || 'Sin sede', isClient: !!e.is_client,
+    logoUrl: e.logo_url || undefined, severidad: demo.severidad, factor: demo.factor,
+    sucursales: sucs.length ? sucs.map(s => ({ id: s.id, name: s.name, ...sucParams(s.name) })) : undefined,
+  }
+}
+
+// Envoltura: con Supabase conectado pide login (admin); sin conectar, muestra la demo.
+export default function AdminPage() {
+  return supabaseReady ? <LoginGate requireAdmin><AdminPanel /></LoginGate> : <AdminPanel />
+}
+
+function AdminPanel() {
   const [empresasList, setEmpresasList] = useState<Empresa[]>(seedEmpresas)
   const [selected, setSelected] = useState<Empresa | null>(null)
   const [tab, setTab] = useState<'dashboard' | 'carga' | 'accidentes'>('dashboard')
@@ -74,6 +102,17 @@ export default function AdminPanel() {
   const [fLogo, setFLogo] = useState<string | null>(null)       // vista previa (data URL)
   const [fLogoFile, setFLogoFile] = useState<File | null>(null) // archivo real (para subir a Supabase)
   const [creando, setCreando] = useState(false)
+
+  // Cargar las empresas desde Supabase (cuando está conectado)
+  useEffect(() => {
+    if (!supabase) return
+    ;(async () => {
+      const { data: emps } = await supabase!.from('empresas').select('*').order('created_at', { ascending: true })
+      if (!emps) return
+      const { data: sucs } = await supabase!.from('sucursales').select('*')
+      setEmpresasList(emps.map(e => dbToEmpresa(e, (sucs || []).filter((s: any) => s.empresa_id === e.id))))
+    })()
+  }, [])
 
   function onLogoFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -114,12 +153,22 @@ export default function AdminPanel() {
       const url = await uploadLogo(fLogoFile, slug)
       if (url) logoUrl = url
     }
-    const nueva: Empresa = {
-      id: slug, name: fName.trim(), slug,
-      color: fColor, rubro: fRubro.trim() || 'Sin especificar', sede: fSede.trim() || 'Sin sede', isClient: fClient,
-      logoUrl, severidad: 0, factor: 1,
+    if (supabaseReady && supabase) {
+      // Guardar en la base de datos
+      const { data, error } = await supabase.from('empresas')
+        .insert({ name: fName.trim(), slug, color: fColor, rubro: fRubro.trim() || 'Sin especificar', sede: fSede.trim() || 'Sin sede', is_client: fClient, logo_url: logoUrl })
+        .select().single()
+      if (error || !data) { alert('No se pudo crear el cliente: ' + (error?.message || '')); setCreando(false); return }
+      setEmpresasList(l => [dbToEmpresa(data, []), ...l])
+    } else {
+      // Demo local (sin Supabase)
+      const nueva: Empresa = {
+        id: slug, name: fName.trim(), slug,
+        color: fColor, rubro: fRubro.trim() || 'Sin especificar', sede: fSede.trim() || 'Sin sede', isClient: fClient,
+        logoUrl, severidad: 0, factor: 1,
+      }
+      setEmpresasList(l => [nueva, ...l])
     }
-    setEmpresasList(l => [nueva, ...l])
     setCreateOpen(false)
     setFName(''); setFRubro(''); setFSede(''); setFColor(COLOR_SWATCHES[0]); setFClient(true); setFLogo(null); setFLogoFile(null)
     setCreando(false)
@@ -177,16 +226,26 @@ export default function AdminPanel() {
               )}
             </div>
 
-            {!selected && (
-              <button onClick={() => setCreateOpen(true)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-semibold hover:opacity-90 transition-opacity"
-                style={{ backgroundColor: COLORS.green }}>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                </svg>
-                <span className="hidden sm:inline">Nuevo cliente</span>
-              </button>
-            )}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {!selected && (
+                <button onClick={() => setCreateOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-semibold hover:opacity-90 transition-opacity"
+                  style={{ backgroundColor: COLORS.green }}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span className="hidden sm:inline">Nuevo cliente</span>
+                </button>
+              )}
+              {supabaseReady && (
+                <button onClick={() => signOut()} title="Cerrar sesión"
+                  className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke={COLORS.gray} strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                </button>
+              )}
+            </div>
           </div>
         </header>
 
