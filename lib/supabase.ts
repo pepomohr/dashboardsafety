@@ -139,6 +139,23 @@ export async function borrarDocumento(id: string, archivoPath?: string | null): 
   return true
 }
 
+// ── Sucursales ──
+export async function crearSucursal(empresaId: string, nombre: string): Promise<{ id: string; name: string } | null> {
+  if (!supabase) return null
+  const { data, error } = await supabase.from('sucursales')
+    .insert({ empresa_id: empresaId, name: nombre.trim() }).select().single()
+  if (error || !data) { console.error('crearSucursal:', error?.message); return null }
+  return { id: data.id, name: data.name }
+}
+
+/** Borra una sucursal. Su documentación y accidentes quedan sin sucursal asignada. */
+export async function borrarSucursal(id: string): Promise<boolean> {
+  if (!supabase) return false
+  const { error } = await supabase.from('sucursales').delete().eq('id', id)
+  if (error) { console.error('borrarSucursal:', error.message); return false }
+  return true
+}
+
 /** Borra una empresa. Sucursales, documentos y accidentes caen en cascada. */
 export async function borrarEmpresa(id: string): Promise<boolean> {
   if (!supabase) return false

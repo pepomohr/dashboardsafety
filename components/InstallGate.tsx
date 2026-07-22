@@ -108,7 +108,7 @@ export default function InstallGate({ children }: { children: ReactNode }) {
         </div>
 
         <button onClick={() => setDecision('app')} className="mt-6 text-xs underline" style={{ color: COLORS.grayMid }}>
-          Continuar en el navegador (demo)
+          Continuar en el navegador
         </button>
       </div>
     </div>

@@ -74,49 +74,63 @@ export default function InformeReporte({
           </div>
         ))}
       </div>
-      <table className="w-full text-sm" style={{ borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-        <colgroup>
-          <col style={{ width: '56%' }} />
-          <col style={{ width: '22%' }} />
-          <col style={{ width: '22%' }} />
-        </colgroup>
-        <thead>
-          <tr style={{ backgroundColor: COLORS.bg }}>
-            <th className="text-left py-1.5 px-2" style={{ color: COLORS.gray, fontSize: 11 }}>DOCUMENTO</th>
-            <th className="text-left py-1.5 px-2" style={{ color: COLORS.gray, fontSize: 11 }}>VENCE</th>
-            <th className="text-left py-1.5 px-2" style={{ color: COLORS.gray, fontSize: 11 }}>ESTADO</th>
-          </tr>
-        </thead>
-        <tbody>
-          {docs.map(d => {
-            const s = statusStyle(d.status)
-            return (
-              <tr key={d.id} style={{ borderBottom: '1px solid #eee' }}>
-                <td className="py-1.5 px-2" style={{ wordBreak: 'break-word' }}>{d.name}</td>
-                <td className="py-1.5 px-2" style={{ color: COLORS.gray }}>{d.expiry.split('-').reverse().join('/')}</td>
-                <td className="py-1.5 px-2">
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: s.bg, color: s.text }}>{s.label}</span>
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+      {docs.length === 0 ? (
+        <p className="text-sm py-3" style={{ color: COLORS.gray }}>No hay documentación cargada a la fecha de emisión.</p>
+      ) : (
+        <table className="informe-tabla w-full" style={{ borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+          <colgroup>
+            <col className="col-doc" />
+            <col className="col-venc" />
+            <col className="col-estado" />
+          </colgroup>
+          <thead>
+            <tr style={{ backgroundColor: COLORS.bg }}>
+              <th className="text-left py-1.5 px-2" style={{ color: COLORS.gray, fontSize: 11 }}>DOCUMENTO</th>
+              <th className="text-left py-1.5 px-2" style={{ color: COLORS.gray, fontSize: 11 }}>VENCE</th>
+              <th className="text-left py-1.5 px-2" style={{ color: COLORS.gray, fontSize: 11 }}>ESTADO</th>
+            </tr>
+          </thead>
+          <tbody>
+            {docs.map((d, i) => {
+              const s = statusStyle(d.status)
+              return (
+                <tr key={`${d.name}-${i}`} style={{ borderBottom: '1px solid #eee' }}>
+                  <td className="celda-doc py-1.5 px-2" style={{ wordBreak: 'break-word' }}>{d.name}</td>
+                  <td className="celda-venc py-1.5 px-2" style={{ color: COLORS.gray, whiteSpace: 'nowrap' }}>
+                    {d.expiry ? d.expiry.split('-').reverse().join('/') : '—'}
+                  </td>
+                  <td className="py-1.5 px-2">
+                    <span className="chip-estado font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: s.bg, color: s.text, whiteSpace: 'nowrap' }}>{s.label}</span>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      )}
 
       {/* Siniestralidad */}
       <h2 className="font-display text-base font-bold mt-6 mb-2" style={{ color: COLORS.greenDark }}>2 · Resumen de siniestralidad</h2>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
-        {[['Accidentes', accidentes], ['Frecuencia', indices.frecuencia.toFixed(2)], ['Gravedad', indices.gravedad.toFixed(2)], ['Incidencia', indices.incidencia.toFixed(2)]].map(([l, v]) => (
-          <div key={l as string} className="rounded-lg p-3" style={{ border: '1px solid #eee' }}>
-            <p className="text-lg font-bold">{v as any}</p>
-            <p className="text-xs" style={{ color: COLORS.gray }}>{l as string}</p>
+      {accidentes === 0 ? (
+        <p className="text-sm py-1" style={{ color: COLORS.gray }}>
+          Sin accidentes registrados en el período. <b style={{ color: COLORS.greenDark }}>Índice de incidencia: 0,00</b>
+        </p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            {[['Accidentes', accidentes], ['Índice de incidencia', indices.incidencia.toFixed(2)]].map(([l, v]) => (
+              <div key={l as string} className="rounded-lg p-3" style={{ border: '1px solid #eee' }}>
+                <p className="text-lg font-bold">{v as any}</p>
+                <p className="text-xs" style={{ color: COLORS.gray }}>{l as string}</p>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      <p className="text-sm mb-1" style={{ color: COLORS.grayDark }}><b>Accidentes por área:</b></p>
-      <p className="text-sm" style={{ color: COLORS.gray }}>
-        {porArea.map(a => `${a.area}: ${a.valor}`).join('  ·  ')}
-      </p>
+          <p className="text-sm mb-1" style={{ color: COLORS.grayDark }}><b>Accidentes por área:</b></p>
+          <p className="text-sm" style={{ color: COLORS.gray }}>
+            {porArea.filter(a => a.valor > 0).map(a => `${a.area}: ${a.valor}`).join('  ·  ') || 'Sin datos por área.'}
+          </p>
+        </>
+      )}
 
       {/* Firma */}
       <div className="flex justify-end mt-12">
@@ -126,6 +140,26 @@ export default function InformeReporte({
       <p className="text-center text-xs mt-10" style={{ color: COLORS.grayMid }}>
         Documento generado por Safety Services · {hoy} · Este informe refleja el estado registrado en la plataforma a la fecha de emisión.
       </p>
+
+      <style jsx>{`
+        /* Anchos de la tabla. En pantallas chicas la fecha y el estado necesitan
+           más lugar, si no la fecha se corta y se pisa con el chip de vigencia. */
+        .informe-tabla { font-size: 14px; }
+        .col-doc    { width: 56%; }
+        .col-venc   { width: 22%; }
+        .col-estado { width: 22%; }
+        .chip-estado { font-size: 12px; }
+
+        @media (max-width: 640px) {
+          .informe-tabla { font-size: 11px; }
+          .col-doc    { width: 44%; }
+          .col-venc   { width: 27%; }
+          .col-estado { width: 29%; }
+          .celda-doc  { line-height: 1.3; }
+          .celda-venc { font-size: 10px; }
+          .chip-estado { font-size: 9px; padding-left: 6px; padding-right: 6px; }
+        }
+      `}</style>
     </div>
   )
 }

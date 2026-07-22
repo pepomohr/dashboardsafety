@@ -12,12 +12,13 @@ import {
   gravedadLesiones, circunstancia, causas, origen, accidentesPorPuesto, diasPerdidos, indiceComparado,
 } from '@/lib/mockData'
 import {
-  Empresa,
+  Empresa, Sucursal,
   empresaDocs, empresaAccidentesPorMes, empresaAccidentesPorArea, empresaPartes, empresaIndices,
 } from '@/lib/empresas'
 import {
   supabase, uploadLogo, supabaseReady, signOut,
   listTipos, listDocumentos, crearDocumento, borrarDocumento, uploadDocumento, urlDocumento, borrarEmpresa,
+  crearSucursal, borrarSucursal,
   DocRow,
 } from '@/lib/supabase'
 import LoginGate from '@/components/LoginGate'
@@ -33,6 +34,7 @@ import Sidebar, { NavItem } from '@/components/Sidebar'
 import Logo from '@/components/Logo'
 import EnviarAppButton from '@/components/EnviarAppButton'
 import { useDialogo } from '@/components/Dialogo'
+import { descargarComoPDF } from '@/lib/pdf'
 
 const COLOR_SWATCHES = ['#E2001A', '#1E9BD7', '#F57C00', '#2E7D32', '#7E57C2', '#EC407A', '#00897B', '#3D3D3D']
 const DOC_TYPES = documents.map(d => d.name)
@@ -108,6 +110,10 @@ function AdminPanel() {
   const [createOpen, setCreateOpen] = useState(false)
   const [uploadOk, setUploadOk] = useState(false)
   const [informeOpen, setInformeOpen] = useState(false)
+  const [pdfGenerando, setPdfGenerando] = useState(false)
+  const [sucOpen, setSucOpen] = useState(false)
+  const [sucNombre, setSucNombre] = useState('')
+  const [sucGuardando, setSucGuardando] = useState(false)
 
   // Form de alta de empresa
   const [fName, setFName] = useState('')
@@ -198,16 +204,61 @@ function AdminPanel() {
   function enterEmpresa(e: Empresa) {
     setSelected(e)
     setTab('dashboard')
-    const suc = e.sucursales?.[0] ?? null
-    setSucursalId(suc?.id ?? null)
+    // Arranca en "General" (toda la empresa); las sucursales se eligen aparte.
+    setSucursalId(null)
     setUploadOk(false)
-    recargarDocs(e, suc?.id ?? null)
+    recargarDocs(e, null)
   }
 
-  function changeSucursal(e: Empresa, id: string) {
+  function changeSucursal(e: Empresa, id: string | null) {
     setSucursalId(id)
     setUploadOk(false)
     recargarDocs(e, id)
+  }
+
+  /** Agrega una sucursal a la empresa abierta. */
+  async function agregarSucursal() {
+    const nombre = sucNombre.trim()
+    if (!nombre || !selected || sucGuardando) return
+    if (selected.sucursales?.some(x => x.name.toLowerCase() === nombre.toLowerCase())) {
+      await avisar('Esa sucursal ya existe', `“${nombre}” ya está cargada en ${selected.name}.`)
+      return
+    }
+    setSucGuardando(true)
+    let nueva: Sucursal
+    if (supabaseReady) {
+      const creada = await crearSucursal(selected.id, nombre)
+      if (!creada) { setSucGuardando(false); await avisar('No se pudo crear la sucursal', 'Revisá tu conexión y probá de nuevo.'); return }
+      nueva = { id: creada.id, name: creada.name, severidad: 0, factor: 0 }
+    } else {
+      nueva = { id: `local-${Date.now()}`, name: nombre, severidad: 0, factor: 0 }
+    }
+    const conSuc = (e: Empresa): Empresa => ({ ...e, sucursales: [...(e.sucursales ?? []), nueva] })
+    setSelected(e => (e ? conSuc(e) : e))
+    setEmpresasList(l => l.map(x => (x.id === selected.id ? conSuc(x) : x)))
+    setSucGuardando(false)
+    setSucOpen(false)
+    setSucNombre('')
+  }
+
+  /** Quita una sucursal. Su documentación pasa a quedar a nivel general de la empresa. */
+  async function eliminarSucursal(suc: Sucursal) {
+    const ok0 = await confirmar({
+      titulo: `¿Quitar la sucursal “${suc.name}”?`,
+      mensaje: 'La documentación y los accidentes que tenía cargados pasan a figurar a nivel general de la empresa.',
+      detalle: 'Esta acción no se puede deshacer.',
+      confirmarTexto: 'Quitar sucursal', peligro: true,
+    })
+    if (!ok0 || !selected) return
+    if (supabaseReady && !suc.id.startsWith('local-')) {
+      const ok = await borrarSucursal(suc.id)
+      if (!ok) { await avisar('No se pudo quitar la sucursal', 'Revisá tu conexión y probá de nuevo.'); return }
+    }
+    const sinSuc = (e: Empresa): Empresa => ({ ...e, sucursales: (e.sucursales ?? []).filter(x => x.id !== suc.id) })
+    setSelected(e => (e ? sinSuc(e) : e))
+    setEmpresasList(l => l.map(x => (x.id === selected.id ? sinSuc(x) : x)))
+    if (sucursalId === suc.id) changeSucursal(sinSuc(selected), null)
+    refrescarStats()
   }
 
   // Sucursal activa y sus parámetros (o la empresa si no tiene sucursales)
@@ -314,6 +365,16 @@ function AdminPanel() {
     const url = await urlDocumento(doc.archivo)
     if (url) window.open(url, '_blank', 'noopener,noreferrer')
     else await avisar('No se pudo abrir el archivo', 'Puede que se haya borrado del almacenamiento.')
+  }
+
+  async function descargarInforme() {
+    const nodo = document.getElementById('informe')
+    if (!nodo || !selected) return
+    setPdfGenerando(true)
+    const titulo = `Informe ${selected.name}${branch ? ` ${branch.name}` : ''}`
+    const ok = await descargarComoPDF(nodo, titulo)
+    setPdfGenerando(false)
+    if (!ok) await avisar('No se pudo generar el PDF', 'Probá de nuevo; si sigue fallando, usá Imprimir → Guardar como PDF.')
   }
 
   async function eliminarEmpresa(e: Empresa) {
@@ -472,25 +533,49 @@ function AdminPanel() {
                 </div>
               </div>
 
-              {/* Selector de sucursal (si la empresa tiene varias) */}
-              {selected.sucursales && selected.sucursales.length > 0 && (
-                <div className="flex items-center gap-2 flex-wrap bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3">
-                  <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide mr-1" style={{ color: COLORS.gray }}>
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke={COLORS.gray} strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                    Sucursal
-                  </span>
-                  {selected.sucursales.map(s => {
-                    const a = s.id === sucursalId
-                    return (
-                      <button key={s.id} onClick={() => changeSucursal(selected!, s.id)}
-                        className="px-3.5 py-1.5 rounded-full text-sm font-semibold transition-colors border"
-                        style={a ? { backgroundColor: selected.color, color: '#fff', borderColor: selected.color } : { backgroundColor: '#fff', color: COLORS.grayDark, borderColor: '#e5e7eb' }}>
+              {/* Sucursales: elegir, agregar y quitar */}
+              <div className="flex items-center gap-2 flex-wrap bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3">
+                <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide mr-1" style={{ color: COLORS.gray }}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke={COLORS.gray} strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                  {selected.sucursales?.length ? 'Sucursales' : 'Sede única'}
+                </span>
+
+                {/* Opción "toda la empresa" cuando ya hay sucursales */}
+                {!!selected.sucursales?.length && (
+                  <button onClick={() => changeSucursal(selected!, null)}
+                    className="px-3.5 py-1.5 rounded-full text-sm font-semibold transition-colors border"
+                    style={sucursalId === null
+                      ? { backgroundColor: selected.color, color: '#fff', borderColor: selected.color }
+                      : { backgroundColor: '#fff', color: COLORS.grayDark, borderColor: '#e5e7eb' }}>
+                    General
+                  </button>
+                )}
+
+                {selected.sucursales?.map(s => {
+                  const a = s.id === sucursalId
+                  return (
+                    <span key={s.id} className="inline-flex items-center rounded-full border overflow-hidden"
+                      style={a ? { backgroundColor: selected.color, borderColor: selected.color } : { backgroundColor: '#fff', borderColor: '#e5e7eb' }}>
+                      <button onClick={() => changeSucursal(selected!, s.id)}
+                        className="pl-3.5 pr-2 py-1.5 text-sm font-semibold"
+                        style={{ color: a ? '#fff' : COLORS.grayDark }}>
                         {s.name}
                       </button>
-                    )
-                  })}
-                </div>
-              )}
+                      <button onClick={() => eliminarSucursal(s)} title={`Quitar ${s.name}`}
+                        className="pr-2.5 pl-0.5 py-1.5 text-xs opacity-60 hover:opacity-100"
+                        style={{ color: a ? '#fff' : COLORS.gray }}>
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    </span>
+                  )
+                })}
+
+                <button onClick={() => { setSucNombre(''); setSucOpen(true) }}
+                  className="px-3.5 py-1.5 rounded-full text-sm font-semibold border border-dashed transition-colors hover:bg-gray-50"
+                  style={{ color: COLORS.greenDark, borderColor: COLORS.green }}>
+                  + Agregar sucursal
+                </button>
+              </div>
 
               {/* Tabs */}
               <div className="flex gap-1 sm:gap-2 border-b border-gray-200">
@@ -608,9 +693,11 @@ function AdminPanel() {
             <div className="relative min-h-full flex flex-col items-center py-8 px-4">
               <div className="no-print sticky top-0 z-10 mb-4 flex items-center gap-3 bg-white rounded-2xl shadow-lg px-4 py-3">
                 <p className="text-sm font-semibold" style={{ color: COLORS.grayDark }}>Informe de {selected.name}{branch ? ` · ${branch.name}` : ''}</p>
-                <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-semibold hover:opacity-90" style={{ backgroundColor: COLORS.green }}>
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                  Guardar como PDF
+                <button onClick={descargarInforme} disabled={pdfGenerando}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+                  style={{ backgroundColor: COLORS.green }}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                  {pdfGenerando ? 'Generando…' : 'Descargar PDF'}
                 </button>
                 <button onClick={() => setInformeOpen(false)} className="p-2 rounded-xl hover:bg-gray-100">
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke={COLORS.gray} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -624,6 +711,39 @@ function AdminPanel() {
           </div>
         )
       })()}
+
+      {/* ══════════ MODAL NUEVA SUCURSAL ══════════ */}
+      {sucOpen && selected && (
+        <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSucOpen(false)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm ss-animate overflow-hidden">
+            <div className="h-1.5" style={{ backgroundColor: selected.color }} />
+            <div className="px-6 pt-5 pb-4">
+              <h3 className="font-display font-bold text-lg" style={{ color: COLORS.grayDark }}>Nueva sucursal</h3>
+              <p className="text-sm mt-1" style={{ color: COLORS.gray }}>
+                Cada sucursal lleva su propia documentación y sus propios accidentes, por separado.
+              </p>
+              <div className="mt-4">
+                <Field label="Nombre de la sucursal *">
+                  <input value={sucNombre} autoFocus onChange={e => setSucNombre(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') agregarSucursal(); if (e.key === 'Escape') setSucOpen(false) }}
+                    placeholder="Ej: Lomas de Zamora" className="ss-input" style={{ color: COLORS.grayDark }} />
+                </Field>
+              </div>
+            </div>
+            <div className="px-6 pb-6 flex flex-col-reverse sm:flex-row gap-2">
+              <button onClick={() => setSucOpen(false)}
+                className="flex-1 py-3 rounded-xl text-sm font-semibold border border-gray-200 hover:bg-gray-50"
+                style={{ color: COLORS.gray }}>Cancelar</button>
+              <button onClick={agregarSucursal} disabled={!sucNombre.trim() || sucGuardando}
+                className="flex-1 py-3 rounded-xl text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50"
+                style={{ backgroundColor: COLORS.green }}>
+                {sucGuardando ? 'Creando…' : 'Crear sucursal'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {Dialogo}
 

@@ -22,6 +22,7 @@ import BodyMap2 from '@/components/BodyMap2'
 import Sidebar, { NavItem } from '@/components/Sidebar'
 import Logo from '@/components/Logo'
 import InformeReporte from '@/components/InformeReporte'
+import { descargarComoPDF } from '@/lib/pdf'
 
 const ANIOS = ['2024', '2025', '2026']
 const MESES_FULL = ['Todos los meses','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
@@ -98,6 +99,16 @@ export default function PreviewClienteDashboard() {
   const [bellOpen, setBellOpen] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
   const [informeOpen, setInformeOpen] = useState(false)
+  const [pdfGenerando, setPdfGenerando] = useState(false)
+
+  async function descargarInforme() {
+    const nodo = document.getElementById('informe')
+    if (!nodo) return
+    setPdfGenerando(true)
+    const ok = await descargarComoPDF(nodo, `Informe ${empresaName}`)
+    setPdfGenerando(false)
+    if (!ok) alert('No se pudo generar el PDF. Probá de nuevo.')
+  }
 
   // Cliente del link (?empresa=comafi&sucursal=lomas). Sin parámetro → demo.
   const [empSlug, setEmpSlug] = useState<string | null>(null)
@@ -115,7 +126,7 @@ export default function PreviewClienteDashboard() {
   const branch = emp?.sucursales?.find(s => s.id === sucId) ?? emp?.sucursales?.[0] ?? null
   const factor = branch?.factor ?? emp?.factor ?? 1
   const severidad = branch?.severidad ?? emp?.severidad ?? 0
-  const empresaName = emp ? (branch ? `${emp.name} · ${branch.name}` : emp.name) : 'Empresa Demo S.A.'
+  const empresaName = emp ? (branch ? `${emp.name} · ${branch.name}` : emp.name) : 'Mi empresa'
 
   // Fuentes de datos: las del cliente del link, o el demo por defecto
   const docsSource = emp ? empresaDocs(severidad) : documents
@@ -589,12 +600,12 @@ export default function PreviewClienteDashboard() {
             {/* Barra de acciones */}
             <div className="no-print sticky top-0 z-10 mb-4 flex items-center gap-3 bg-white rounded-2xl shadow-lg px-4 py-3">
               <p className="text-sm font-semibold" style={{ color: COLORS.grayDark }}>Vista previa del informe</p>
-              <button onClick={() => window.print()}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-semibold hover:opacity-90" style={{ backgroundColor: COLORS.green }}>
+              <button onClick={descargarInforme} disabled={pdfGenerando}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-semibold hover:opacity-90 disabled:opacity-60" style={{ backgroundColor: COLORS.green }}>
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
-                Guardar como PDF
+                {pdfGenerando ? 'Generando…' : 'Descargar PDF'}
               </button>
               <button onClick={() => setInformeOpen(false)} className="p-2 rounded-xl hover:bg-gray-100">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke={COLORS.gray} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
