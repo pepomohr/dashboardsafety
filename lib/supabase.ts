@@ -140,6 +140,14 @@ export async function borrarDocumento(id: string, archivoPath?: string | null): 
 }
 
 // ── Sucursales ──
+/** Marca si las sucursales de la empresa se muestran como tarjetas separadas. */
+export async function setSucursalesSeparadas(empresaId: string, valor: boolean): Promise<boolean> {
+  if (!supabase) return false
+  const { error } = await supabase.from('empresas').update({ sucursales_separadas: valor }).eq('id', empresaId)
+  if (error) { console.error('setSucursalesSeparadas:', error.message); return false }
+  return true
+}
+
 export async function crearSucursal(empresaId: string, nombre: string): Promise<{ id: string; name: string } | null> {
   if (!supabase) return null
   const { data, error } = await supabase.from('sucursales')

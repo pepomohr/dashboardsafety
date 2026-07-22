@@ -18,7 +18,7 @@ import {
 import {
   supabase, uploadLogo, supabaseReady, signOut,
   listTipos, listDocumentos, crearDocumento, borrarDocumento, uploadDocumento, urlDocumento, borrarEmpresa,
-  crearSucursal, borrarSucursal,
+  crearSucursal, borrarSucursal, setSucursalesSeparadas,
   DocRow,
 } from '@/lib/supabase'
 import LoginGate from '@/components/LoginGate'
@@ -68,6 +68,7 @@ function dbToEmpresa(e: any, sucs: any[] = []): Empresa {
     id: e.id, name: e.name, slug: e.slug, color: e.color || '#6FB63F',
     rubro: e.rubro || 'Sin especificar', sede: e.sede || 'Sin sede', isClient: !!e.is_client,
     logoUrl: e.logo_url || undefined, severidad: 0, factor: 0,
+    sucursalesSeparadas: !!e.sucursales_separadas,
     sucursales: sucs.length ? sucs.map(s => ({ id: s.id, name: s.name, severidad: 0, factor: 0 })) : undefined,
   }
 }
@@ -155,16 +156,7 @@ function AdminPanel() {
       const { data: sucs } = await supabase!.from('sucursales').select('*')
       setEmpresasList(emps.map(e => dbToEmpresa(e, (sucs || []).filter((s: any) => s.empresa_id === e.id))))
 
-      // Conteo real de documentación para las tarjetas
-      const { data: docs } = await supabase!.from('documentos').select('empresa_id, fecha_vencimiento')
-      const acc: Record<string, DocStats> = {}
-      for (const d of docs || []) {
-        const st = acc[d.empresa_id] ?? (acc[d.empresa_id] = { total: 0, vig: 0, exp: 0, ven: 0 })
-        st.total++
-        const e = estadoDoc(d.fecha_vencimiento)
-        if (e === 'valid') st.vig++; else if (e === 'expiring') st.exp++; else st.ven++
-      }
-      setStats(acc)
+      await refrescarStats()
     })()
     listTipos().then(t => { if (t.length) setTipos(t) })
   }, [])
@@ -172,13 +164,17 @@ function AdminPanel() {
   /** Recalcula el conteo de documentación que muestran las tarjetas de clientes. */
   async function refrescarStats() {
     if (!supabase) return
-    const { data: docs } = await supabase.from('documentos').select('empresa_id, fecha_vencimiento')
+    const { data: docs } = await supabase.from('documentos').select('empresa_id, sucursal_id, fecha_vencimiento')
     const acc: Record<string, DocStats> = {}
-    for (const d of docs || []) {
-      const st = acc[d.empresa_id] ?? (acc[d.empresa_id] = { total: 0, vig: 0, exp: 0, ven: 0 })
+    const sumar = (clave: string, venc: string | null) => {
+      const st = acc[clave] ?? (acc[clave] = { total: 0, vig: 0, exp: 0, ven: 0 })
       st.total++
-      const e = estadoDoc(d.fecha_vencimiento)
+      const e = estadoDoc(venc)
       if (e === 'valid') st.vig++; else if (e === 'expiring') st.exp++; else st.ven++
+    }
+    for (const d of docs || []) {
+      sumar(d.empresa_id, d.fecha_vencimiento)                 // total de la empresa
+      if (d.sucursal_id) sumar(d.sucursal_id, d.fecha_vencimiento)  // y de cada sucursal
     }
     setStats(acc)
   }
@@ -201,13 +197,14 @@ function AdminPanel() {
     reader.readAsDataURL(file)
   }
 
-  function enterEmpresa(e: Empresa) {
+  function enterEmpresa(e: Empresa, sucId: string | null = null) {
     setSelected(e)
     setTab('dashboard')
-    // Arranca en "General" (toda la empresa); las sucursales se eligen aparte.
-    setSucursalId(null)
+    // Por defecto "General" (toda la empresa); si venís de la tarjeta de una
+    // sucursal, entra directo a esa sucursal.
+    setSucursalId(sucId)
     setUploadOk(false)
-    recargarDocs(e, null)
+    recargarDocs(e, sucId)
   }
 
   function changeSucursal(e: Empresa, id: string | null) {
@@ -239,6 +236,18 @@ function AdminPanel() {
     setSucGuardando(false)
     setSucOpen(false)
     setSucNombre('')
+  }
+
+  /** Activa o desactiva que las sucursales se vean como tarjetas propias en la grilla. */
+  async function cambiarSucursalesSeparadas(valor: boolean) {
+    if (!selected) return
+    if (supabaseReady) {
+      const ok = await setSucursalesSeparadas(selected.id, valor)
+      if (!ok) { await avisar('No se pudo guardar el cambio', 'Revisá tu conexión y probá de nuevo.'); return }
+    }
+    const con = (e: Empresa): Empresa => ({ ...e, sucursalesSeparadas: valor })
+    setSelected(e => (e ? con(e) : e))
+    setEmpresasList(l => l.map(x => (x.id === selected.id ? con(x) : x)))
   }
 
   /** Quita una sucursal. Su documentación pasa a quedar a nivel general de la empresa. */
@@ -476,10 +485,19 @@ function AdminPanel() {
                 </div>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                {empresasList.map(e => (
-                  <EmpresaCard key={e.id} empresa={e} onEnter={enterEmpresa}
-                    stats={supabaseReady ? (stats[e.id] ?? { total: 0, vig: 0, exp: 0, ven: 0 }) : undefined} />
-                ))}
+                {empresasList.flatMap(e => {
+                  const vacio: DocStats = { total: 0, vig: 0, exp: 0, ven: 0 }
+                  const st = (id: string) => (supabaseReady ? (stats[id] ?? vacio) : undefined)
+                  // Si el cliente tiene el modo "sucursales separadas", va una tarjeta por sucursal.
+                  if (e.sucursalesSeparadas && e.sucursales?.length) {
+                    return e.sucursales.map(suc => (
+                      <EmpresaCard key={`${e.id}-${suc.id}`} stats={st(suc.id)}
+                        empresa={{ ...e, name: `${e.name} · ${suc.name}`, sede: suc.name }}
+                        onEnter={() => enterEmpresa(e, suc.id)} />
+                    ))
+                  }
+                  return [<EmpresaCard key={e.id} empresa={e} stats={st(e.id)} onEnter={() => enterEmpresa(e)} />]
+                })}
                 {/* Card para agregar */}
                 {empresasList.length > 0 && <button onClick={() => setCreateOpen(true)}
                   className="rounded-3xl border-2 border-dashed flex flex-col items-center justify-center gap-2 py-10 transition-colors hover:bg-white min-h-[260px]"
@@ -575,6 +593,18 @@ function AdminPanel() {
                   style={{ color: COLORS.greenDark, borderColor: COLORS.green }}>
                   + Agregar sucursal
                 </button>
+
+                {/* Con 2 o más sucursales, se pueden mostrar como clientes separados */}
+                {(selected.sucursales?.length ?? 0) >= 2 && (
+                  <label className="flex items-center gap-2 cursor-pointer ml-auto pl-3 border-l border-gray-100">
+                    <input type="checkbox" checked={!!selected.sucursalesSeparadas}
+                      onChange={e => cambiarSucursalesSeparadas(e.target.checked)}
+                      className="w-4 h-4 accent-green-700" />
+                    <span className="text-xs font-medium" style={{ color: COLORS.gray }}>
+                      Mostrar como tarjetas separadas
+                    </span>
+                  </label>
+                )}
               </div>
 
               {/* Tabs */}

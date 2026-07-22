@@ -55,6 +55,14 @@ export default function EmpresaCard({ empresa, onEnter, stats }: { empresa: Empr
           <span className="text-xs" style={{ color: COLORS.gray }}>{empresa.sede}</span>
         </div>
 
+        {/* Cuando las sucursales NO se muestran separadas, se avisa cuántas tiene */}
+        {!empresa.sucursalesSeparadas && !!empresa.sucursales?.length && (
+          <span className="mt-2 self-start text-[10px] font-semibold px-2 py-0.5 rounded-full"
+            style={{ backgroundColor: COLORS.bg, color: COLORS.gray }}>
+            {empresa.sucursales.length} sucursales
+          </span>
+        )}
+
         {/* Logo + estado documental */}
         <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
           <EmpresaLogo name={empresa.name} color={empresa.color} slug={empresa.slug} logoUrl={empresa.logoUrl} size={52} />

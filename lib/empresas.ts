@@ -19,6 +19,7 @@ export interface Empresa {
   severidad: number    // 0 = impecable, 3 = con varios vencidos (para variar el dashboard)
   factor: number       // escala de accidentes para diferenciar empresas
   sucursales?: Sucursal[]  // si la empresa tiene varias sedes con datos distintos
+  sucursalesSeparadas?: boolean  // true = cada sucursal se muestra como su propia tarjeta
 }
 
 export const empresas: Empresa[] = [
