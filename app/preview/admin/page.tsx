@@ -32,6 +32,7 @@ import InformeReporte from '@/components/InformeReporte'
 import Sidebar, { NavItem } from '@/components/Sidebar'
 import Logo from '@/components/Logo'
 import EnviarAppButton from '@/components/EnviarAppButton'
+import { useDialogo } from '@/components/Dialogo'
 
 const COLOR_SWATCHES = ['#E2001A', '#1E9BD7', '#F57C00', '#2E7D32', '#7E57C2', '#EC407A', '#00897B', '#3D3D3D']
 const DOC_TYPES = documents.map(d => d.name)
@@ -93,6 +94,7 @@ export default function AdminPage() {
 }
 
 function AdminPanel() {
+  const { confirmar, avisar, Dialogo } = useDialogo()
   // Siempre arranca vacío: los clientes salen de la base, nunca de datos de ejemplo.
   const [empresasList, setEmpresasList] = useState<Empresa[]>([])
   const [selected, setSelected] = useState<Empresa | null>(null)
@@ -230,7 +232,7 @@ function AdminPanel() {
       const { data, error } = await supabase.from('empresas')
         .insert({ name: fName.trim(), slug, color: fColor, rubro: fRubro.trim() || 'Sin especificar', sede: fSede.trim() || 'Sin sede', is_client: fClient, logo_url: logoUrl })
         .select().single()
-      if (error || !data) { alert('No se pudo crear el cliente: ' + (error?.message || '')); setCreando(false); return }
+      if (error || !data) { await avisar('No se pudo crear el cliente', error?.message || 'Probá de nuevo en unos segundos.'); setCreando(false); return }
       setEmpresasList(l => [dbToEmpresa(data, []), ...l])
     } else {
       // Demo local (sin Supabase)
@@ -261,7 +263,7 @@ function AdminPanel() {
   async function cargarDoc() {
     if (!dTipo || !dVenc || !selected || guardando) return
     if (dEmision && dEmision > dVenc) {
-      alert('La fecha del estudio no puede ser posterior a la de vencimiento.')
+      await avisar('Revisá las fechas', 'La fecha del estudio no puede ser posterior a la de vencimiento.')
       return
     }
     setGuardando(true)
@@ -276,14 +278,14 @@ function AdminPanel() {
     let archivo: string | null = null
     if (dArchivo) {
       archivo = await uploadDocumento(dArchivo, selected.id)
-      if (!archivo) { alert('No se pudo subir el archivo. Probá de nuevo.'); setGuardando(false); return }
+      if (!archivo) { await avisar('No se pudo subir el archivo', 'Revisá tu conexión y probá de nuevo.'); setGuardando(false); return }
     }
     const creado = await crearDocumento({
       empresa_id: selected.id, sucursal_id: sucursalId, tipo: dTipo,
       fecha_emision: dEmision || null, fecha_vencimiento: dVenc,
       archivo_url: archivo, nota: dNota || null,
     })
-    if (!creado) { alert('No se pudo guardar el documento.'); setGuardando(false); return }
+    if (!creado) { await avisar('No se pudo guardar el documento', 'Revisá tu conexión y probá de nuevo.'); setGuardando(false); return }
 
     setDocsState(d => [rowToDoc(creado), ...d])
     setUploadOk(true); limpiarForm(); setGuardando(false)
@@ -292,10 +294,16 @@ function AdminPanel() {
   }
 
   async function eliminarDoc(doc: DocUI) {
-    if (!confirm(`¿Eliminar "${doc.name}"?\n\nSe borra también su archivo. Esta acción no se puede deshacer.`)) return
+    const ok0 = await confirmar({
+      titulo: `¿Eliminar “${doc.name}”?`,
+      mensaje: doc.archivo ? 'También se borra el archivo adjunto.' : undefined,
+      detalle: 'Esta acción no se puede deshacer.',
+      confirmarTexto: 'Eliminar', peligro: true,
+    })
+    if (!ok0) return
     if (supabaseReady && !doc.dbId.startsWith('local-')) {
       const ok = await borrarDocumento(doc.dbId, doc.archivo)
-      if (!ok) { alert('No se pudo eliminar el documento.'); return }
+      if (!ok) { await avisar('No se pudo eliminar el documento', 'Revisá tu conexión y probá de nuevo.'); return }
     }
     setDocsState(d => d.filter(x => x.dbId !== doc.dbId))
     refrescarStats()
@@ -305,14 +313,20 @@ function AdminPanel() {
     if (!doc.archivo) return
     const url = await urlDocumento(doc.archivo)
     if (url) window.open(url, '_blank', 'noopener,noreferrer')
-    else alert('No se pudo abrir el archivo.')
+    else await avisar('No se pudo abrir el archivo', 'Puede que se haya borrado del almacenamiento.')
   }
 
   async function eliminarEmpresa(e: Empresa) {
-    if (!confirm(`¿Eliminar el cliente "${e.name}"?\n\nSe borran también sus sucursales, documentación y accidentes. Esta acción no se puede deshacer.`)) return
+    const ok0 = await confirmar({
+      titulo: `¿Eliminar el cliente “${e.name}”?`,
+      mensaje: 'Se borran también sus sucursales, su documentación y sus accidentes.',
+      detalle: 'Esta acción no se puede deshacer.',
+      confirmarTexto: 'Eliminar cliente', peligro: true,
+    })
+    if (!ok0) return
     if (supabaseReady) {
       const ok = await borrarEmpresa(e.id)
-      if (!ok) { alert('No se pudo eliminar el cliente.'); return }
+      if (!ok) { await avisar('No se pudo eliminar el cliente', 'Revisá tu conexión y probá de nuevo.'); return }
     }
     setEmpresasList(l => l.filter(x => x.id !== e.id))
     setSelected(null)
@@ -498,7 +512,7 @@ function AdminPanel() {
                   tipo={dTipo} setTipo={setDTipo}
                   emision={dEmision} setEmision={setDEmision} venc={dVenc} setVenc={setDVenc}
                   nota={dNota} setNota={setDNota} archivo={dArchivo} setArchivo={setDArchivo}
-                  onCargar={cargarDoc} guardando={guardando} onEliminar={eliminarDoc} onAbrir={abrirArchivo}
+                  onCargar={cargarDoc} guardando={guardando} onEliminar={eliminarDoc} onAbrir={abrirArchivo} avisar={avisar}
                   uploadOk={uploadOk} color={selected.color} />
               )}
             </div>
@@ -610,6 +624,8 @@ function AdminPanel() {
           </div>
         )
       })()}
+
+      {Dialogo}
 
       <style jsx global>{`
         .ss-input { width: 100%; padding: 0.6rem 0.85rem; border-radius: 0.6rem; border: 1px solid #e5e7eb; font-size: 0.875rem; outline: none; }
@@ -880,7 +896,7 @@ function EmpresaDashboard({ factor, docs }: { factor: number; docs: DocUI[] }) {
 // ══════════════════════════ CARGA DE DOCUMENTACIÓN ══════════════════════════
 function CargaDocumentacion({
   docs, cargando, tipos, tipo, setTipo, emision, setEmision, venc, setVenc,
-  nota, setNota, archivo, setArchivo, onCargar, guardando, onEliminar, onAbrir, uploadOk, color,
+  nota, setNota, archivo, setArchivo, onCargar, guardando, onEliminar, onAbrir, uploadOk, color, avisar,
 }: {
   docs: DocUI[]
   cargando: boolean
@@ -896,6 +912,7 @@ function CargaDocumentacion({
   onAbrir: (d: DocUI) => void
   uploadOk: boolean
   color: string
+  avisar: (t: string, m?: string) => Promise<boolean>
 }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 items-start">
@@ -936,7 +953,7 @@ function CargaDocumentacion({
                 <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden"
                   onChange={e => {
                     const f = e.target.files?.[0] || null
-                    if (f && f.size > 20 * 1024 * 1024) { alert('El archivo supera los 20 MB.'); e.target.value = ''; return }
+                    if (f && f.size > 20 * 1024 * 1024) { avisar('El archivo es muy grande', 'El máximo permitido es 20 MB.'); e.target.value = ''; return }
                     setArchivo(f)
                   }} />
               </label>
