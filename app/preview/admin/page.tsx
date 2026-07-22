@@ -102,6 +102,27 @@ function AdminPanel() {
   const [fLogo, setFLogo] = useState<string | null>(null)       // vista previa (data URL)
   const [fLogoFile, setFLogoFile] = useState<File | null>(null) // archivo real (para subir a Supabase)
   const [creando, setCreando] = useState(false)
+  const [logoSubiendo, setLogoSubiendo] = useState(false)
+
+  // Cambiar el logo de un cliente ya existente (se guarda en Supabase Storage)
+  async function cambiarLogoEmpresa(ev: React.ChangeEvent<HTMLInputElement>) {
+    const file = ev.target.files?.[0]
+    if (!file || !selected) return
+    setLogoSubiendo(true)
+    let url: string | null = supabaseReady ? await uploadLogo(file, selected.slug) : null
+    if (url && supabase) {
+      await supabase.from('empresas').update({ logo_url: url }).eq('id', selected.id)
+    }
+    if (!url) {
+      // Sin Supabase: vista previa local (no persiste)
+      url = await new Promise<string>(res => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.readAsDataURL(file) })
+    }
+    const nuevo = url
+    setSelected(s => (s ? { ...s, logoUrl: nuevo } : s))
+    setEmpresasList(l => l.map(x => (x.id === selected.id ? { ...x, logoUrl: nuevo } : x)))
+    setLogoSubiendo(false)
+    ev.target.value = ''
+  }
 
   // Cargar las empresas desde Supabase (cuando está conectado)
   useEffect(() => {
@@ -277,7 +298,14 @@ function AdminPanel() {
             <div className="ss-animate space-y-5">
               {/* Encabezado de empresa */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
-                <EmpresaLogo name={selected.name} color={selected.color} slug={selected.slug} logoUrl={selected.logoUrl} size={60} />
+                <label className="relative cursor-pointer group flex-shrink-0" title="Cambiar logo del cliente">
+                  <EmpresaLogo name={selected.name} color={selected.color} slug={selected.slug} logoUrl={selected.logoUrl} size={60} />
+                  <span className="absolute inset-0 rounded-2xl flex items-center justify-center text-white text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ backgroundColor: 'rgba(0,0,0,.55)' }}>
+                    {logoSubiendo ? '…' : 'Cambiar'}
+                  </span>
+                  <input type="file" accept="image/*" className="hidden" onChange={cambiarLogoEmpresa} disabled={logoSubiendo} />
+                </label>
                 <div className="min-w-0 flex-1">
                   <h2 className="font-display text-xl font-extrabold" style={{ color: COLORS.grayDark }}>{selected.name}</h2>
                   <p className="text-sm" style={{ color: COLORS.gray }}>{selected.rubro} · {selected.sede}</p>
