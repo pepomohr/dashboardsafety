@@ -22,7 +22,6 @@ import BodyMap2 from '@/components/BodyMap2'
 import Sidebar, { NavItem } from '@/components/Sidebar'
 import Logo from '@/components/Logo'
 import InformeReporte from '@/components/InformeReporte'
-import DemoSwitcher from '@/components/DemoSwitcher'
 
 const ANIOS = ['2024', '2025', '2026']
 const MESES_FULL = ['Todos los meses','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
@@ -581,7 +580,6 @@ export default function PreviewClienteDashboard() {
         </main>
       </div>
 
-      <DemoSwitcher current="cliente" />
 
       {/* ════════ MODAL INFORME PDF ════════ */}
       {informeOpen && (

@@ -54,3 +54,95 @@ export async function uploadLogo(file: File, slug: string): Promise<string | nul
   const { data } = supabase.storage.from('logos').getPublicUrl(path)
   return data.publicUrl
 }
+
+// ── Catálogo de tipos de documento ──
+export async function listTipos(): Promise<string[]> {
+  if (!supabase) return []
+  const { data } = await supabase.from('tipos_documento').select('nombre').order('orden')
+  return (data || []).map((t: any) => t.nombre)
+}
+
+// ── Documentación ──
+export interface DocRow {
+  id: string
+  tipo: string
+  fecha_emision: string | null
+  fecha_vencimiento: string | null
+  archivo_path: string | null
+  nota: string | null
+}
+
+export async function listDocumentos(empresaId: string, sucursalId?: string | null): Promise<DocRow[]> {
+  if (!supabase) return []
+  let q = supabase.from('documentos')
+    .select('id, tipo, fecha_emision, fecha_vencimiento, archivo_url, nota')
+    .eq('empresa_id', empresaId)
+  q = sucursalId ? q.eq('sucursal_id', sucursalId) : q.is('sucursal_id', null)
+  const { data, error } = await q.order('fecha_vencimiento', { ascending: true, nullsFirst: false })
+  if (error) { console.error('listDocumentos:', error.message); return [] }
+  return (data || []).map((d: any) => ({
+    id: d.id, tipo: d.tipo, fecha_emision: d.fecha_emision,
+    fecha_vencimiento: d.fecha_vencimiento, archivo_path: d.archivo_url, nota: d.nota,
+  }))
+}
+
+/**
+ * Sube el archivo de un documento al bucket privado "documentos".
+ * La ruta arranca con el id de la empresa: así el cliente solo accede a lo suyo.
+ * Devuelve la ruta interna (no una URL pública: el bucket es privado).
+ */
+export async function uploadDocumento(file: File, empresaId: string): Promise<string | null> {
+  if (!supabase) return null
+  const limpio = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-80)
+  const path = `${empresaId}/${Date.now()}-${limpio}`
+  const { error } = await supabase.storage.from('documentos').upload(path, file, { upsert: false })
+  if (error) { console.error('uploadDocumento:', error.message); return null }
+  return path
+}
+
+/** Link temporal (1 hora) para ver/descargar un documento del bucket privado. */
+export async function urlDocumento(path: string): Promise<string | null> {
+  if (!supabase) return null
+  const { data, error } = await supabase.storage.from('documentos').createSignedUrl(path, 3600)
+  if (error) { console.error('urlDocumento:', error.message); return null }
+  return data.signedUrl
+}
+
+export async function crearDocumento(row: {
+  empresa_id: string; sucursal_id?: string | null; tipo: string
+  fecha_emision?: string | null; fecha_vencimiento?: string | null
+  archivo_url?: string | null; nota?: string | null
+}): Promise<DocRow | null> {
+  if (!supabase) return null
+  const { data, error } = await supabase.from('documentos').insert({
+    empresa_id: row.empresa_id,
+    sucursal_id: row.sucursal_id || null,
+    tipo: row.tipo,
+    fecha_emision: row.fecha_emision || null,
+    fecha_vencimiento: row.fecha_vencimiento || null,
+    archivo_url: row.archivo_url || null,
+    nota: row.nota || null,
+  }).select().single()
+  if (error || !data) { console.error('crearDocumento:', error?.message); return null }
+  return {
+    id: data.id, tipo: data.tipo, fecha_emision: data.fecha_emision,
+    fecha_vencimiento: data.fecha_vencimiento, archivo_path: data.archivo_url, nota: data.nota,
+  }
+}
+
+/** Borra el documento y también su archivo del Storage (para no dejar basura). */
+export async function borrarDocumento(id: string, archivoPath?: string | null): Promise<boolean> {
+  if (!supabase) return false
+  const { error } = await supabase.from('documentos').delete().eq('id', id)
+  if (error) { console.error('borrarDocumento:', error.message); return false }
+  if (archivoPath) await supabase.storage.from('documentos').remove([archivoPath])
+  return true
+}
+
+/** Borra una empresa. Sucursales, documentos y accidentes caen en cascada. */
+export async function borrarEmpresa(id: string): Promise<boolean> {
+  if (!supabase) return false
+  const { error } = await supabase.from('empresas').delete().eq('id', id)
+  if (error) { console.error('borrarEmpresa:', error.message); return false }
+  return true
+}

@@ -12,22 +12,25 @@ import {
   gravedadLesiones, circunstancia, causas, origen, accidentesPorPuesto, diasPerdidos, indiceComparado,
 } from '@/lib/mockData'
 import {
-  empresas as seedEmpresas, Empresa,
+  Empresa,
   empresaDocs, empresaAccidentesPorMes, empresaAccidentesPorArea, empresaPartes, empresaIndices,
 } from '@/lib/empresas'
-import { supabase, uploadLogo, supabaseReady, signOut } from '@/lib/supabase'
+import {
+  supabase, uploadLogo, supabaseReady, signOut,
+  listTipos, listDocumentos, crearDocumento, borrarDocumento, uploadDocumento, urlDocumento, borrarEmpresa,
+  DocRow,
+} from '@/lib/supabase'
 import LoginGate from '@/components/LoginGate'
 import Card from '@/components/Card'
 import Gauge from '@/components/Gauge'
 import BodyMap2 from '@/components/BodyMap2'
 import Donut from '@/components/Donut'
-import EmpresaCard from '@/components/EmpresaCard'
+import EmpresaCard, { DocStats } from '@/components/EmpresaCard'
 import EmpresaLogo from '@/components/EmpresaLogo'
 import CargaAccidentes from '@/components/CargaAccidentes'
 import InformeReporte from '@/components/InformeReporte'
 import Sidebar, { NavItem } from '@/components/Sidebar'
 import Logo from '@/components/Logo'
-import DemoSwitcher from '@/components/DemoSwitcher'
 import EnviarAppButton from '@/components/EnviarAppButton'
 
 const COLOR_SWATCHES = ['#E2001A', '#1E9BD7', '#F57C00', '#2E7D32', '#7E57C2', '#EC407A', '#00897B', '#3D3D3D']
@@ -55,27 +58,34 @@ function urgencyValue(days: number) {
   return 0
 }
 
-// Parámetros de demo para el dashboard (mientras no estén migrados docs/accidentes reales)
-const DEMO_PARAMS: Record<string, { severidad: number; factor: number }> = {
-  comafi: { severidad: 3, factor: 0.7 },
-  belgrano: { severidad: 0, factor: 1 },
-}
-function sucParams(name: string) {
-  const n = (name || '').toLowerCase()
-  if (n.includes('lomas')) return { severidad: 3, factor: 0.9 }
-  if (n.includes('ramos')) return { severidad: 1, factor: 0.4 }
-  return { severidad: 0, factor: 1 }
-}
-// Convierte una fila de la base (empresas) a nuestro tipo Empresa
+// Convierte una fila de la base (empresas) a nuestro tipo Empresa.
+// severidad/factor quedan en 0: cada cliente arranca sin datos inventados.
 function dbToEmpresa(e: any, sucs: any[] = []): Empresa {
-  const demo = DEMO_PARAMS[e.slug] || { severidad: 0, factor: 1 }
   return {
     id: e.id, name: e.name, slug: e.slug, color: e.color || '#6FB63F',
     rubro: e.rubro || 'Sin especificar', sede: e.sede || 'Sin sede', isClient: !!e.is_client,
-    logoUrl: e.logo_url || undefined, severidad: demo.severidad, factor: demo.factor,
-    sucursales: sucs.length ? sucs.map(s => ({ id: s.id, name: s.name, ...sucParams(s.name) })) : undefined,
+    logoUrl: e.logo_url || undefined, severidad: 0, factor: 0,
+    sucursales: sucs.length ? sucs.map(s => ({ id: s.id, name: s.name, severidad: 0, factor: 0 })) : undefined,
   }
 }
+
+/** Estado de un documento según su fecha de vencimiento. */
+function estadoDoc(venc: string | null): DocItem['status'] {
+  if (!venc) return 'valid'
+  const dias = Math.round((new Date(venc + 'T00:00:00').getTime() - Date.now()) / 86400000)
+  return dias <= 0 ? 'expired' : dias <= 30 ? 'expiring' : 'valid'
+}
+
+/** Documento de la base → el tipo que usan las tarjetas y el informe. */
+function rowToDoc(r: DocRow): DocItem & { dbId: string; archivo?: string | null; emision?: string | null } {
+  return {
+    id: 0, dbId: r.id, name: r.tipo, status: estadoDoc(r.fecha_vencimiento),
+    expiry: r.fecha_vencimiento || '', desvio: 'sin',
+    archivo: r.archivo_path, emision: r.fecha_emision,
+    note: r.nota || undefined,
+  }
+}
+type DocUI = ReturnType<typeof rowToDoc>
 
 // Envoltura: con Supabase conectado pide login (admin); sin conectar, muestra la demo.
 export default function AdminPage() {
@@ -83,10 +93,14 @@ export default function AdminPage() {
 }
 
 function AdminPanel() {
-  const [empresasList, setEmpresasList] = useState<Empresa[]>(seedEmpresas)
+  // Siempre arranca vacío: los clientes salen de la base, nunca de datos de ejemplo.
+  const [empresasList, setEmpresasList] = useState<Empresa[]>([])
   const [selected, setSelected] = useState<Empresa | null>(null)
   const [tab, setTab] = useState<'dashboard' | 'carga' | 'accidentes'>('dashboard')
-  const [docsState, setDocsState] = useState<DocItem[]>([])
+  const [docsState, setDocsState] = useState<DocUI[]>([])
+  const [docsCargando, setDocsCargando] = useState(false)
+  const [tipos, setTipos] = useState<string[]>(DOC_TYPES)
+  const [stats, setStats] = useState<Record<string, DocStats>>({})
   const [sucursalId, setSucursalId] = useState<string | null>(null)
   const [navOpen, setNavOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
@@ -132,8 +146,43 @@ function AdminPanel() {
       if (!emps) return
       const { data: sucs } = await supabase!.from('sucursales').select('*')
       setEmpresasList(emps.map(e => dbToEmpresa(e, (sucs || []).filter((s: any) => s.empresa_id === e.id))))
+
+      // Conteo real de documentación para las tarjetas
+      const { data: docs } = await supabase!.from('documentos').select('empresa_id, fecha_vencimiento')
+      const acc: Record<string, DocStats> = {}
+      for (const d of docs || []) {
+        const st = acc[d.empresa_id] ?? (acc[d.empresa_id] = { total: 0, vig: 0, exp: 0, ven: 0 })
+        st.total++
+        const e = estadoDoc(d.fecha_vencimiento)
+        if (e === 'valid') st.vig++; else if (e === 'expiring') st.exp++; else st.ven++
+      }
+      setStats(acc)
     })()
+    listTipos().then(t => { if (t.length) setTipos(t) })
   }, [])
+
+  /** Recalcula el conteo de documentación que muestran las tarjetas de clientes. */
+  async function refrescarStats() {
+    if (!supabase) return
+    const { data: docs } = await supabase.from('documentos').select('empresa_id, fecha_vencimiento')
+    const acc: Record<string, DocStats> = {}
+    for (const d of docs || []) {
+      const st = acc[d.empresa_id] ?? (acc[d.empresa_id] = { total: 0, vig: 0, exp: 0, ven: 0 })
+      st.total++
+      const e = estadoDoc(d.fecha_vencimiento)
+      if (e === 'valid') st.vig++; else if (e === 'expiring') st.exp++; else st.ven++
+    }
+    setStats(acc)
+  }
+
+  /** Trae de la base la documentación de la empresa/sucursal elegida. */
+  async function recargarDocs(empresa: Empresa, sucId: string | null) {
+    if (!supabaseReady) { setDocsState([]); return }
+    setDocsCargando(true)
+    const rows = await listDocumentos(empresa.id, sucId)
+    setDocsState(rows.map(rowToDoc))
+    setDocsCargando(false)
+  }
 
   function onLogoFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -149,15 +198,14 @@ function AdminPanel() {
     setTab('dashboard')
     const suc = e.sucursales?.[0] ?? null
     setSucursalId(suc?.id ?? null)
-    setDocsState(empresaDocs(suc?.severidad ?? e.severidad))
     setUploadOk(false)
+    recargarDocs(e, suc?.id ?? null)
   }
 
   function changeSucursal(e: Empresa, id: string) {
-    const suc = e.sucursales?.find(s => s.id === id)
     setSucursalId(id)
-    setDocsState(empresaDocs(suc?.severidad ?? e.severidad))
     setUploadOk(false)
+    recargarDocs(e, id)
   }
 
   // Sucursal activa y sus parámetros (o la empresa si no tiene sucursales)
@@ -167,7 +215,10 @@ function AdminPanel() {
   async function crearEmpresa() {
     if (!fName.trim() || creando) return
     setCreando(true)
-    const slug = (fName.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')) || `e${Date.now()}`
+    const base = (fName.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')) || `cliente`
+    // El slug tiene que ser único (la base lo exige): si ya existe, le agrega -2, -3, …
+    let slug = base
+    for (let i = 2; empresasList.some(x => x.slug === slug); i++) slug = `${base}-${i}`
     // El logo: si Supabase está conectado, se sube al Storage; si no, se usa la vista previa local.
     let logoUrl: string | undefined = fLogo || undefined
     if (fLogoFile && supabaseReady) {
@@ -199,17 +250,72 @@ function AdminPanel() {
   const [dTipo, setDTipo] = useState('')
   const [dEmision, setDEmision] = useState('')
   const [dVenc, setDVenc] = useState('')
+  const [dNota, setDNota] = useState('')
+  const [dArchivo, setDArchivo] = useState<File | null>(null)
+  const [guardando, setGuardando] = useState(false)
 
-  function cargarDoc() {
-    if (!dTipo || !dVenc) return
-    const today = new Date()
-    const days = Math.round((new Date(dVenc + 'T00:00:00').getTime() - today.getTime()) / 86400000)
-    const status: DocItem['status'] = days <= 0 ? 'expired' : days <= 30 ? 'expiring' : 'valid'
-    const nuevo: DocItem = { id: Date.now(), name: dTipo, status, expiry: dVenc, desvio: 'sin' }
-    setDocsState(d => [nuevo, ...d.filter(x => x.name !== dTipo)])
-    setUploadOk(true)
-    setDTipo(''); setDEmision(''); setDVenc('')
+  function limpiarForm() {
+    setDTipo(''); setDEmision(''); setDVenc(''); setDNota(''); setDArchivo(null)
+  }
+
+  async function cargarDoc() {
+    if (!dTipo || !dVenc || !selected || guardando) return
+    if (dEmision && dEmision > dVenc) {
+      alert('La fecha del estudio no puede ser posterior a la de vencimiento.')
+      return
+    }
+    setGuardando(true)
+
+    if (!supabaseReady) {
+      setDocsState(d => [rowToDoc({ id: `local-${Date.now()}`, tipo: dTipo, fecha_emision: dEmision || null, fecha_vencimiento: dVenc, archivo_path: null, nota: dNota || null }), ...d])
+      setUploadOk(true); limpiarForm(); setGuardando(false)
+      setTimeout(() => setUploadOk(false), 2500)
+      return
+    }
+
+    let archivo: string | null = null
+    if (dArchivo) {
+      archivo = await uploadDocumento(dArchivo, selected.id)
+      if (!archivo) { alert('No se pudo subir el archivo. Probá de nuevo.'); setGuardando(false); return }
+    }
+    const creado = await crearDocumento({
+      empresa_id: selected.id, sucursal_id: sucursalId, tipo: dTipo,
+      fecha_emision: dEmision || null, fecha_vencimiento: dVenc,
+      archivo_url: archivo, nota: dNota || null,
+    })
+    if (!creado) { alert('No se pudo guardar el documento.'); setGuardando(false); return }
+
+    setDocsState(d => [rowToDoc(creado), ...d])
+    setUploadOk(true); limpiarForm(); setGuardando(false)
+    refrescarStats()
     setTimeout(() => setUploadOk(false), 2500)
+  }
+
+  async function eliminarDoc(doc: DocUI) {
+    if (!confirm(`¿Eliminar "${doc.name}"?\n\nSe borra también su archivo. Esta acción no se puede deshacer.`)) return
+    if (supabaseReady && !doc.dbId.startsWith('local-')) {
+      const ok = await borrarDocumento(doc.dbId, doc.archivo)
+      if (!ok) { alert('No se pudo eliminar el documento.'); return }
+    }
+    setDocsState(d => d.filter(x => x.dbId !== doc.dbId))
+    refrescarStats()
+  }
+
+  async function abrirArchivo(doc: DocUI) {
+    if (!doc.archivo) return
+    const url = await urlDocumento(doc.archivo)
+    if (url) window.open(url, '_blank', 'noopener,noreferrer')
+    else alert('No se pudo abrir el archivo.')
+  }
+
+  async function eliminarEmpresa(e: Empresa) {
+    if (!confirm(`¿Eliminar el cliente "${e.name}"?\n\nSe borran también sus sucursales, documentación y accidentes. Esta acción no se puede deshacer.`)) return
+    if (supabaseReady) {
+      const ok = await borrarEmpresa(e.id)
+      if (!ok) { alert('No se pudo eliminar el cliente.'); return }
+    }
+    setEmpresasList(l => l.filter(x => x.id !== e.id))
+    setSelected(null)
   }
 
   return (
@@ -275,10 +381,32 @@ function AdminPanel() {
           {/* ══════════ GRILLA DE EMPRESAS ══════════ */}
           {!selected && (
             <div className="ss-animate">
+              {empresasList.length === 0 && (
+                <div className="bg-white rounded-3xl border border-gray-100 shadow-sm px-6 py-14 text-center mb-5">
+                  <div className="w-16 h-16 mx-auto rounded-2xl flex items-center justify-center mb-4" style={{ backgroundColor: COLORS.greenLight }}>
+                    <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke={COLORS.green} strokeWidth={1.6}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-2.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a4 4 0 10-3-1.5" />
+                    </svg>
+                  </div>
+                  <h2 className="font-display text-xl font-extrabold" style={{ color: COLORS.grayDark }}>Todavía no hay clientes</h2>
+                  <p className="text-sm mt-2 max-w-md mx-auto" style={{ color: COLORS.gray }}>
+                    Creá tu primera empresa con el botón <strong>Nuevo cliente</strong>. Vas a poder cargarle el logo, sus sucursales, la documentación y los accidentes.
+                  </p>
+                  <button onClick={() => setCreateOpen(true)}
+                    className="mt-5 inline-flex items-center gap-2 px-5 py-3 rounded-xl text-white text-sm font-semibold hover:opacity-90 transition-opacity"
+                    style={{ backgroundColor: COLORS.green }}>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+                    Crear el primer cliente
+                  </button>
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                {empresasList.map(e => <EmpresaCard key={e.id} empresa={e} onEnter={enterEmpresa} />)}
+                {empresasList.map(e => (
+                  <EmpresaCard key={e.id} empresa={e} onEnter={enterEmpresa}
+                    stats={supabaseReady ? (stats[e.id] ?? { total: 0, vig: 0, exp: 0, ven: 0 }) : undefined} />
+                ))}
                 {/* Card para agregar */}
-                <button onClick={() => setCreateOpen(true)}
+                {empresasList.length > 0 && <button onClick={() => setCreateOpen(true)}
                   className="rounded-3xl border-2 border-dashed flex flex-col items-center justify-center gap-2 py-10 transition-colors hover:bg-white min-h-[260px]"
                   style={{ borderColor: '#D6DAD4' }}>
                   <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ backgroundColor: COLORS.greenLight }}>
@@ -288,7 +416,7 @@ function AdminPanel() {
                   </div>
                   <span className="text-sm font-semibold" style={{ color: COLORS.grayDark }}>Nuevo cliente</span>
                   <span className="text-xs" style={{ color: COLORS.gray }}>Dar de alta una empresa</span>
-                </button>
+                </button>}
               </div>
             </div>
           )}
@@ -315,13 +443,17 @@ function AdminPanel() {
                     style={selected.isClient
                       ? { backgroundColor: COLORS.greenLight, color: COLORS.greenDark }
                       : { backgroundColor: '#FBF3DD', color: '#8A6A12' }}>
-                    {selected.isClient ? 'Cliente oficial de Safety Services' : 'Prospecto / Demo'}
+                    {selected.isClient ? 'Cliente oficial de Safety Services' : 'Prospecto'}
                   </span>
                   <button onClick={() => setInformeOpen(true)}
                     className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-white text-sm font-semibold hover:opacity-90 transition-opacity"
                     style={{ backgroundColor: COLORS.grayDark }}>
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                     <span className="hidden sm:inline">Informe PDF</span>
+                  </button>
+                  <button onClick={() => eliminarEmpresa(selected)} title="Eliminar cliente"
+                    className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center text-gray-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-colors">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M4 7h16" /></svg>
                   </button>
                 </div>
               </div>
@@ -362,16 +494,17 @@ function AdminPanel() {
               {tab === 'dashboard' && <EmpresaDashboard factor={activeFactor} docs={docsState} />}
               {tab === 'accidentes' && <CargaAccidentes color={selected.color} />}
               {tab === 'carga' && (
-                <CargaDocumentacion docs={docsState} tipo={dTipo} setTipo={setDTipo}
+                <CargaDocumentacion docs={docsState} cargando={docsCargando} tipos={tipos}
+                  tipo={dTipo} setTipo={setDTipo}
                   emision={dEmision} setEmision={setDEmision} venc={dVenc} setVenc={setDVenc}
-                  onCargar={cargarDoc} uploadOk={uploadOk} color={selected.color} />
+                  nota={dNota} setNota={setDNota} archivo={dArchivo} setArchivo={setDArchivo}
+                  onCargar={cargarDoc} guardando={guardando} onEliminar={eliminarDoc} onAbrir={abrirArchivo}
+                  uploadOk={uploadOk} color={selected.color} />
               )}
             </div>
           )}
         </main>
       </div>
-
-      <DemoSwitcher current="admin" />
 
       {/* ══════════ MODAL ALTA EMPRESA ══════════ */}
       {createOpen && (
@@ -436,7 +569,7 @@ function AdminPanel() {
                   )}
                   <div className="min-w-0">
                     <p className="text-[10px] italic font-semibold" style={{ color: 'rgba(255,255,255,.85)' }}>
-                      {fClient ? 'CLIENTE OFICIAL DE SAFETY SERVICES' : 'PROSPECTO · DEMO'}
+                      {fClient ? 'CLIENTE OFICIAL DE SAFETY SERVICES' : 'PROSPECTO'}
                     </p>
                     <p className="font-display text-white font-extrabold truncate">{fName || 'Nombre de la empresa'}</p>
                   </div>
@@ -496,16 +629,16 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 // ══════════════════════════ DASHBOARD DE LA EMPRESA ══════════════════════════
-function EmpresaDashboard({ factor, docs }: { factor: number; docs: DocItem[] }) {
+function EmpresaDashboard({ factor, docs }: { factor: number; docs: DocUI[] }) {
   const total = docs.length
   const vig = docs.filter(d => d.status === 'valid').length
   const exp = docs.filter(d => d.status === 'expiring').length
   const ven = docs.filter(d => d.status === 'expired').length
+  const pct = (n: number) => (total > 0 ? (n / total) * 100 : 0)   // evita NaN cuando no hay documentos
 
   const today = new Date()
   const daysTo = (iso: string) => Math.round((new Date(iso + 'T00:00:00').getTime() - today.getTime()) / 86400000)
-  const urgente = docs.map(d => ({ ...d, days: daysTo(d.expiry) })).sort((a, b) => a.days - b.days)[0]
-  const gaugeValue = urgente ? urgencyValue(urgente.days) : 0
+  const urgente = docs.filter(d => d.expiry).map(d => ({ ...d, days: daysTo(d.expiry) })).sort((a, b) => a.days - b.days)[0]
 
   const accMes = empresaAccidentesPorMes(factor)
   const accArea = empresaAccidentesPorArea(factor)
@@ -570,11 +703,13 @@ function EmpresaDashboard({ factor, docs }: { factor: number; docs: DocItem[] })
             {/* Barra de proporción — estado general de vigencia */}
             <div className="w-full mb-3">
               <div className="flex h-6 w-full rounded-full overflow-hidden" style={{ backgroundColor: COLORS.grayLight }}>
-                {vig > 0 && <div style={{ width: `${(vig / total) * 100}%`, backgroundColor: COLORS.green }} />}
-                {exp > 0 && <div style={{ width: `${(exp / total) * 100}%`, backgroundColor: COLORS.warn }} />}
-                {ven > 0 && <div style={{ width: `${(ven / total) * 100}%`, backgroundColor: COLORS.danger }} />}
+                {vig > 0 && <div style={{ width: `${pct(vig)}%`, backgroundColor: COLORS.green }} />}
+                {exp > 0 && <div style={{ width: `${pct(exp)}%`, backgroundColor: COLORS.warn }} />}
+                {ven > 0 && <div style={{ width: `${pct(ven)}%`, backgroundColor: COLORS.danger }} />}
               </div>
-              <p className="text-center text-sm font-bold mt-2" style={{ color: COLORS.grayDark }}>{vig} de {total} documentos vigentes</p>
+              <p className="text-center text-sm font-bold mt-2" style={{ color: COLORS.grayDark }}>
+                {total === 0 ? 'Sin documentación cargada' : `${vig} de ${total} documentos vigentes`}
+              </p>
             </div>
             {urgente && (() => {
               const us = statusStyle(urgente.status); const venc = urgente.days < 0
@@ -597,6 +732,22 @@ function EmpresaDashboard({ factor, docs }: { factor: number; docs: DocItem[] })
         </Card>
       </div>
 
+      {/* Todo el bloque de siniestralidad solo tiene sentido si hay accidentes cargados */}
+      {totalAcc === 0 && (
+        <Card title="Siniestralidad">
+          <div className="py-10 text-center">
+            <div className="w-14 h-14 mx-auto rounded-2xl flex items-center justify-center mb-3" style={{ backgroundColor: COLORS.greenLight }}>
+              <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke={COLORS.green} strokeWidth={1.6}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            </div>
+            <p className="text-sm font-semibold" style={{ color: COLORS.grayDark }}>Sin accidentes registrados</p>
+            <p className="text-xs mt-1 max-w-sm mx-auto" style={{ color: COLORS.gray }}>
+              Cuando cargues accidentes en la pestaña “Accidentes”, acá aparecen los gráficos por área, turno, tipo de lesión y partes del cuerpo.
+            </p>
+          </div>
+        </Card>
+      )}
+
+      {totalAcc > 0 && (<>
       {/* Área + turno + tipo de lesión */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         <Card title="Accidentes por área">
@@ -721,19 +872,28 @@ function EmpresaDashboard({ factor, docs }: { factor: number; docs: DocItem[] })
           </div>
         </div>
       </Card>
+      </>)}
     </div>
   )
 }
 
 // ══════════════════════════ CARGA DE DOCUMENTACIÓN ══════════════════════════
 function CargaDocumentacion({
-  docs, tipo, setTipo, emision, setEmision, venc, setVenc, onCargar, uploadOk, color,
+  docs, cargando, tipos, tipo, setTipo, emision, setEmision, venc, setVenc,
+  nota, setNota, archivo, setArchivo, onCargar, guardando, onEliminar, onAbrir, uploadOk, color,
 }: {
-  docs: DocItem[]
+  docs: DocUI[]
+  cargando: boolean
+  tipos: string[]
   tipo: string; setTipo: (v: string) => void
   emision: string; setEmision: (v: string) => void
   venc: string; setVenc: (v: string) => void
+  nota: string; setNota: (v: string) => void
+  archivo: File | null; setArchivo: (f: File | null) => void
   onCargar: () => void
+  guardando: boolean
+  onEliminar: (d: DocUI) => void
+  onAbrir: (d: DocUI) => void
   uploadOk: boolean
   color: string
 }) {
@@ -752,28 +912,42 @@ function CargaDocumentacion({
             <Field label="Tipo de documento *">
               <select value={tipo} onChange={e => setTipo(e.target.value)} className="ss-input" style={{ color: COLORS.grayDark, background: '#fff' }}>
                 <option value="">Seleccioná el tipo…</option>
-                {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                {tipos.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Fecha de emisión">
-                <input type="date" value={emision} onChange={e => setEmision(e.target.value)} className="ss-input" style={{ color: COLORS.grayDark }} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Fecha del estudio">
+                <input type="date" value={emision} max={venc || undefined} onChange={e => setEmision(e.target.value)} className="ss-input" style={{ color: COLORS.grayDark }} />
               </Field>
               <Field label="Vence el *">
-                <input type="date" value={venc} onChange={e => setVenc(e.target.value)} className="ss-input" style={{ color: COLORS.grayDark }} />
+                <input type="date" value={venc} min={emision || undefined} onChange={e => setVenc(e.target.value)} className="ss-input" style={{ color: COLORS.grayDark }} />
               </Field>
             </div>
-            <Field label="Archivo (PDF o imagen) *">
-              <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed rounded-xl cursor-pointer transition-colors hover:bg-gray-50" style={{ borderColor: '#D6DAD4' }}>
-                <svg className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke={COLORS.grayMid} strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                <span className="text-xs" style={{ color: COLORS.gray }}>Seleccionar archivo</span>
-                <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" />
+            <Field label="Observaciones (opcional)">
+              <input value={nota} onChange={e => setNota(e.target.value)} placeholder="Ej: falta capacitar mantenimiento"
+                className="ss-input" style={{ color: COLORS.grayDark }} />
+            </Field>
+            <Field label="Archivo (PDF o imagen)">
+              <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed rounded-xl cursor-pointer transition-colors hover:bg-gray-50 px-3 text-center" style={{ borderColor: archivo ? color : '#D6DAD4' }}>
+                <svg className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke={archivo ? color : COLORS.grayMid} strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                <span className="text-xs break-all" style={{ color: archivo ? COLORS.grayDark : COLORS.gray }}>
+                  {archivo ? archivo.name : 'Seleccionar archivo'}
+                </span>
+                <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden"
+                  onChange={e => {
+                    const f = e.target.files?.[0] || null
+                    if (f && f.size > 20 * 1024 * 1024) { alert('El archivo supera los 20 MB.'); e.target.value = ''; return }
+                    setArchivo(f)
+                  }} />
               </label>
+              {archivo && (
+                <button type="button" onClick={() => setArchivo(null)} className="text-xs mt-1.5" style={{ color: COLORS.gray }}>Quitar archivo</button>
+              )}
             </Field>
             <button onClick={onCargar}
               className="w-full py-3 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
-              style={{ backgroundColor: color }} disabled={!tipo || !venc}>
-              Cargar documento
+              style={{ backgroundColor: color }} disabled={!tipo || !venc || guardando}>
+              {guardando ? 'Guardando…' : 'Cargar documento'}
             </button>
           </div>
         </Card>
@@ -783,17 +957,33 @@ function CargaDocumentacion({
       <div className="lg:col-span-3">
         <Card title="Documentación cargada" action={<span className="text-xs" style={{ color: COLORS.gray }}>{docs.length} documentos</span>}>
           <div className="space-y-1 max-h-[560px] overflow-y-auto">
+            {cargando && <p className="text-sm py-6 text-center" style={{ color: COLORS.gray }}>Cargando documentación…</p>}
+            {!cargando && docs.length === 0 && (
+              <div className="py-10 text-center">
+                <p className="text-sm font-semibold" style={{ color: COLORS.grayDark }}>Todavía no hay documentación cargada</p>
+                <p className="text-xs mt-1" style={{ color: COLORS.gray }}>Cargá el primer documento con el formulario de la izquierda.</p>
+              </div>
+            )}
             {docs.map(doc => {
               const s = statusStyle(doc.status)
               return (
-                <div key={doc.id} className="flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-gray-50">
+                <div key={doc.dbId} className="flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-gray-50">
                   <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.hex }} />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate" style={{ color: COLORS.grayDark }}>{doc.name}</p>
-                    <p className="text-xs" style={{ color: COLORS.gray }}>{doc.status === 'expired' ? 'Venció' : 'Vence'} el {fmtDate(doc.expiry)}</p>
+                    <p className="text-xs" style={{ color: COLORS.gray }}>
+                      {doc.expiry ? `${doc.status === 'expired' ? 'Venció' : 'Vence'} el ${fmtDate(doc.expiry)}` : 'Sin vencimiento'}
+                      {doc.emision && ` · Estudio del ${fmtDate(doc.emision)}`}
+                    </p>
+                    {doc.note && <p className="text-xs italic truncate" style={{ color: COLORS.grayMid }}>{doc.note}</p>}
                   </div>
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full flex-shrink-0" style={{ backgroundColor: s.bg, color: s.text }}>{s.label}</span>
-                  <button className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500 flex-shrink-0" title="Eliminar">
+                  <span className="hidden sm:inline text-xs font-semibold px-2.5 py-1 rounded-full flex-shrink-0" style={{ backgroundColor: s.bg, color: s.text }}>{s.label}</span>
+                  {doc.archivo && (
+                    <button onClick={() => onAbrir(doc)} className="p-1.5 rounded-lg hover:bg-gray-100 flex-shrink-0" title="Ver archivo" style={{ color: COLORS.gray }}>
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                    </button>
+                  )}
+                  <button onClick={() => onEliminar(doc)} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500 flex-shrink-0" title="Eliminar">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M4 7h16" /></svg>
                   </button>
                 </div>

@@ -13,12 +13,15 @@ function shade(hex: string, p: number) {
   return `rgb(${r},${g},${b})`
 }
 
-export default function EmpresaCard({ empresa, onEnter }: { empresa: Empresa; onEnter: (e: Empresa) => void }) {
-  const docs = empresaDocs(empresa.severidad)
-  const total = docs.length
-  const vig = docs.filter(d => d.status === 'valid').length
-  const exp = docs.filter(d => d.status === 'expiring').length
-  const ven = docs.filter(d => d.status === 'expired').length
+/** Conteo real de documentación de la empresa. Si no llega, se usan los datos de ejemplo. */
+export interface DocStats { total: number; vig: number; exp: number; ven: number }
+
+export default function EmpresaCard({ empresa, onEnter, stats }: { empresa: Empresa; onEnter: (e: Empresa) => void; stats?: DocStats }) {
+  const mock = empresaDocs(empresa.severidad)
+  const total = stats ? stats.total : mock.length
+  const vig = stats ? stats.vig : mock.filter(d => d.status === 'valid').length
+  const exp = stats ? stats.exp : mock.filter(d => d.status === 'expiring').length
+  const ven = stats ? stats.ven : mock.filter(d => d.status === 'expired').length
   const estado = ven > 0 ? 'expired' : exp > 0 ? 'expiring' : 'valid'
   const s = statusStyle(estado)
 
@@ -31,10 +34,10 @@ export default function EmpresaCard({ empresa, onEnter }: { empresa: Empresa; on
         {/* chip de estado */}
         <span className="absolute top-4 right-4 text-[10px] font-bold px-2.5 py-1 rounded-full backdrop-blur"
           style={{ backgroundColor: 'rgba(255,255,255,.9)', color: s.text }}>
-          {ven > 0 ? `${ven} vencido${ven > 1 ? 's' : ''}` : exp > 0 ? `${exp} por vencer` : 'Al día'}
+          {total === 0 ? 'Sin documentación' : ven > 0 ? `${ven} vencido${ven > 1 ? 's' : ''}` : exp > 0 ? `${exp} por vencer` : 'Al día'}
         </span>
         <p className="text-[10px] italic font-semibold tracking-wide" style={{ color: 'rgba(255,255,255,.85)' }}>
-          {empresa.isClient ? 'CLIENTE OFICIAL DE SAFETY SERVICES' : 'PROSPECTO · DEMO'}
+          {empresa.isClient ? 'CLIENTE OFICIAL DE SAFETY SERVICES' : 'PROSPECTO'}
         </p>
         <p className="font-display text-white text-xl font-extrabold leading-tight mt-1 pr-16">{empresa.name}</p>
       </div>

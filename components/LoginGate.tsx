@@ -14,6 +14,7 @@ export default function LoginGate({ children, requireAdmin = false }: { children
   const [email, setEmail] = useState('')
   const [pass, setPass] = useState('')
   const [err, setErr] = useState('')
+  const [verPass, setVerPass] = useState(false)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -67,9 +68,16 @@ export default function LoginGate({ children, requireAdmin = false }: { children
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.gray }}>Contraseña</label>
-              <input type="password" value={pass} onChange={e => setPass(e.target.value)} required autoComplete="current-password"
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
-                style={{ color: COLORS.grayDark }} placeholder="••••••••" />
+              <div className="relative">
+                <input type={verPass ? 'text' : 'password'} name="password" id="password" value={pass} onChange={e => setPass(e.target.value)} required autoComplete="current-password"
+                  className="w-full pl-4 pr-12 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+                  style={{ color: COLORS.grayDark }} placeholder="••••••••" />
+                <button type="button" onClick={() => setVerPass(v => !v)} tabIndex={-1}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 px-3 py-2 text-xs font-semibold"
+                  style={{ color: COLORS.gray }} aria-label={verPass ? 'Ocultar contraseña' : 'Ver contraseña'}>
+                  {verPass ? 'Ocultar' : 'Ver'}
+                </button>
+              </div>
             </div>
             {err && <div className="rounded-xl px-4 py-2.5 text-sm" style={{ backgroundColor: '#FBE9E5', color: '#9A2A18' }}>{err}</div>}
             <button type="submit" disabled={loading}
