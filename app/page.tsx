@@ -23,7 +23,6 @@ export default function Home() {
           style={{ backgroundColor: '#6FB63F' }}>
           Dashboard del cliente →
         </Link>
-        <p className="text-center text-xs" style={{ color: '#A8A8A8' }}>Vista previa · datos de ejemplo</p>
       </div>
     </main>
   )

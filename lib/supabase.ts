@@ -6,7 +6,15 @@ const url = process.env.NEXT_PUBLIC_SUPABASE_URL
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 export const supabase: SupabaseClient | null =
-  url && key && url.startsWith('http') ? createClient(url, key) : null
+  url && key && url.startsWith('http')
+    ? createClient(url, key, {
+        auth: {
+          persistSession: true,      // la sesión queda guardada en el dispositivo
+          autoRefreshToken: true,    // se renueva sola: no lo echa cada rato
+          detectSessionInUrl: true,
+        },
+      })
+    : null
 
 export const supabaseReady = !!supabase
 

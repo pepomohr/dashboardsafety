@@ -61,7 +61,7 @@ export default function LoginGate({ children, requireAdmin = false }: { children
           <form onSubmit={submit} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.gray }}>Email</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} required autoComplete="email"
+              <input type="email" name="email" id="email" value={email} onChange={e => setEmail(e.target.value)} required autoComplete="username email"
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
                 style={{ color: COLORS.grayDark }} placeholder="tu@email.com" />
             </div>
