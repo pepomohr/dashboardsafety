@@ -36,3 +36,6 @@ yarn-error.log*
 next-env.d.ts
 
 dev.log
+
+# build de verificacion local (no pisa la carpeta del dev server)
+.next-build
