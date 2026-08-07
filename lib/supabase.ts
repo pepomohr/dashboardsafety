@@ -116,6 +116,26 @@ export async function getEmpresaById(id: string): Promise<any | null> {
 }
 
 /**
+ * Datos del cliente por su token secreto (link que manda el admin).
+ * Devuelve { empresa, documentos, accidentes } o null si el token no existe.
+ * No requiere login: el token es la llave.
+ */
+export async function datosCliente(token: string): Promise<{ empresa: any; documentos: DocRow[]; accidentes: AccRow[] } | null> {
+  if (!supabase) return null
+  const { data, error } = await supabase.rpc('datos_cliente', { p_token: token })
+  if (error || !data) { if (error) console.error('datosCliente:', error.message); return null }
+  const d: any = data
+  return {
+    empresa: d.empresa,
+    documentos: (d.documentos || []).map((x: any) => ({
+      id: x.id, tipo: x.tipo, fecha_emision: x.fecha_emision,
+      fecha_vencimiento: x.fecha_vencimiento, archivo_path: null, nota: x.nota,
+    })),
+    accidentes: (d.accidentes || []) as AccRow[],
+  }
+}
+
+/**
  * Sube el archivo de un documento al bucket privado "documentos".
  * La ruta arranca con el id de la empresa: así el cliente solo accede a lo suyo.
  * Devuelve la ruta interna (no una URL pública: el bucket es privado).

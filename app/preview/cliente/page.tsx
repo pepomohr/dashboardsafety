@@ -8,12 +8,9 @@ import {
 import { COLORS, statusStyle } from '@/lib/theme'
 import { PART_LABELS, DocItem } from '@/lib/mockData'
 import {
-  supabase, supabaseReady, signOut, getProfile,
-  getEmpresaBySlug, getEmpresaById, listDocumentosEmpresa, listAccidentesEmpresa,
-  urlDocumento, DocRow, AccRow,
+  supabaseReady, datosCliente, DocRow, AccRow,
 } from '@/lib/supabase'
 import { agregarAccidentes } from '@/lib/dashboard'
-import LoginGate from '@/components/LoginGate'
 import BodyMap2 from '@/components/BodyMap2'
 import Sidebar, { NavItem } from '@/components/Sidebar'
 import Logo from '@/components/Logo'
@@ -89,12 +86,8 @@ const NAV: NavItem[] = [
   ) },
 ]
 
-// Con Supabase conectado, el cliente entra con su usuario (ve solo su empresa por RLS).
+// El cliente entra con el link secreto (?t=token) que le manda el admin. Sin contraseña.
 export default function PreviewClienteDashboard() {
-  return supabaseReady ? <LoginGate><ClienteDashboard /></LoginGate> : <ClienteDashboard />
-}
-
-function ClienteDashboard() {
   const [view, setView] = useState('dashboard')
   const [anio, setAnio] = useState<string>('todos')
   const [bellOpen, setBellOpen] = useState(false)
@@ -107,24 +100,21 @@ function ClienteDashboard() {
   const [docs, setDocs] = useState<DocRow[]>([])
   const [accs, setAccs] = useState<AccRow[]>([])
   const [cargando, setCargando] = useState(true)
+  const [sinAcceso, setSinAcceso] = useState(false)
 
-  // Cargar la empresa del cliente (por su perfil) o la del link (?empresa=slug) para vista previa.
+  // Cargar los datos con el token secreto del link (?t=…). Sin login.
   useEffect(() => {
     (async () => {
-      if (!supabaseReady || !supabase) { setCargando(false); return }
-      setCargando(true)
-      let empresa: any = null
-      const prof = await getProfile()
-      if (prof?.empresa_id) empresa = await getEmpresaById(prof.empresa_id)
-      if (!empresa) {
-        const slug = new URLSearchParams(window.location.search).get('empresa')
-        if (slug) empresa = await getEmpresaBySlug(slug)
-      }
-      if (!empresa) { setCargando(false); return }
-      setEmpresaName(empresa.name)
-      setTrabajadores(empresa.trabajadores ?? null)
-      const [d, a] = await Promise.all([listDocumentosEmpresa(empresa.id), listAccidentesEmpresa(empresa.id)])
-      setDocs(d); setAccs(a); setCargando(false)
+      if (!supabaseReady) { setCargando(false); return }
+      const token = new URLSearchParams(window.location.search).get('t')
+      if (!token) { setSinAcceso(true); setCargando(false); return }
+      const data = await datosCliente(token)
+      if (!data?.empresa) { setSinAcceso(true); setCargando(false); return }
+      setEmpresaName(data.empresa.name)
+      setTrabajadores(data.empresa.trabajadores ?? null)
+      setDocs(data.documentos)
+      setAccs(data.accidentes)
+      setCargando(false)
     })()
   }, [])
 
@@ -157,12 +147,6 @@ function ClienteDashboard() {
     setPdfGenerando(true)
     await descargarComoPDF(nodo, `Informe ${empresaName}`)
     setPdfGenerando(false)
-  }
-
-  async function abrirDoc(path: string | null) {
-    if (!path) return
-    const url = await urlDocumento(path)
-    if (url) window.open(url, '_blank', 'noopener,noreferrer')
   }
 
   // ── Tarjeta de estado documental ──
@@ -231,13 +215,6 @@ function ClienteDashboard() {
                   )}
                 </div>
                 <span className="text-xs font-semibold px-2.5 py-1 rounded-full flex-shrink-0" style={{ backgroundColor: s.bg, color: s.text }}>{s.label}</span>
-                {doc.archivo_path && (
-                  <button onClick={() => abrirDoc(doc.archivo_path)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0" title="Ver documento">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke={COLORS.gray} strokeWidth={1.8}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                  </button>
-                )}
               </div>
             )
           })}
@@ -248,13 +225,25 @@ function ClienteDashboard() {
 
   const mesMax = ag.porMes.length ? ag.porMes.reduce((a, b) => (b.accidentes > a.accidentes ? b : a)) : { mes: '—', accidentes: 0 }
 
+  // Sin token válido: no hay acceso (el link es la llave)
+  if (sinAcceso) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center" style={{ backgroundColor: COLORS.bg }}>
+        <Logo size={64} />
+        <h1 className="font-display text-xl font-extrabold mt-4" style={{ color: COLORS.grayDark }}>
+          <span style={{ color: COLORS.green }}>Safety</span> <span style={{ color: COLORS.gray }}>Services</span>
+        </h1>
+        <p className="text-sm mt-3 max-w-xs" style={{ color: COLORS.gray }}>
+          Para ver tu tablero, abrí el <b>link</b> que te envió Safety Services. Si el link no funciona, pedile a tu asesor que te lo reenvíe.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: COLORS.bg }}>
       <Sidebar items={navItems} active={view} onChange={setView} role="Cliente" empresa={empresaName}
-        open={navOpen} onClose={() => setNavOpen(false)}
-        extra={supabaseReady ? (
-          <button onClick={() => signOut()} className="w-full text-left text-sm font-medium px-3 py-2 rounded-lg hover:bg-white/10" style={{ color: COLORS.gray }}>Cerrar sesión</button>
-        ) : undefined} />
+        open={navOpen} onClose={() => setNavOpen(false)} />
 
       <div className="flex-1 min-w-0 flex flex-col">
         <header className="bg-white border-b border-gray-200 sticky top-0 z-40">

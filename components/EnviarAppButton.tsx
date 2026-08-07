@@ -7,12 +7,16 @@ import { COLORS } from '@/lib/theme'
  * Botón para el admin: copia al portapapeles el link de la app del cliente actual,
  * así el Colo lo pega y se lo envía a la empresa.
  */
-export default function EnviarAppButton({ slug, sucursal }: { slug: string; sucursal?: string }) {
+export default function EnviarAppButton({ slug, token, sucursal }: { slug: string; token?: string; sucursal?: string }) {
   const [copied, setCopied] = useState(false)
 
   async function copy() {
     const origin = typeof window !== 'undefined' ? window.location.origin : ''
-    const url = `${origin}/preview/cliente?empresa=${slug}${sucursal ? `&sucursal=${sucursal}` : ''}`
+    // Link con token secreto (acceso sin contraseña). Si todavía no hay token
+    // (maqueta sin base), cae al viejo formato por slug.
+    const url = token
+      ? `${origin}/preview/cliente?t=${token}`
+      : `${origin}/preview/cliente?empresa=${slug}${sucursal ? `&sucursal=${sucursal}` : ''}`
     try {
       await navigator.clipboard.writeText(url)
     } catch {

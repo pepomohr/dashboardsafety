@@ -15,7 +15,6 @@ export default function InstallGate({ children }: { children: ReactNode }) {
   const [decision, setDecision] = useState<'app' | 'gate'>('app')
   const [deferred, setDeferred] = useState<any>(null)
   const [isIOS, setIsIOS] = useState(false)
-  const [iosSafari, setIosSafari] = useState(true)   // en iPhone, instalar solo funciona desde Safari
   const [notif, setNotif] = useState<NotificationPermission | 'unsupported'>('default')
 
   useEffect(() => {
@@ -29,8 +28,6 @@ export default function InstallGate({ children }: { children: ReactNode }) {
     const ua = navigator.userAgent || ''
     const ios = /iphone|ipad|ipod/i.test(ua) || (/Mac/.test(ua) && 'ontouchend' in document)
     setIsIOS(ios)
-    // Safari real (no Chrome/Firefox/in-app en iOS, que no pueden instalar PWAs)
-    setIosSafari(/safari/i.test(ua) && !/crios|fxios|edgios|instagram|fbav|line/i.test(ua))
 
     const standalone =
       window.matchMedia('(display-mode: standalone)').matches ||
@@ -81,41 +78,29 @@ export default function InstallGate({ children }: { children: ReactNode }) {
         <div className="mt-7 space-y-3">
           {isIOS ? (
             <div className="rounded-2xl bg-white border border-gray-100 p-5 text-left shadow-sm">
-              {!iosSafari ? (
-                <div className="flex flex-col items-center text-center gap-2">
-                  <span className="text-3xl">🧭</span>
-                  <p className="text-sm font-semibold" style={{ color: COLORS.grayDark }}>Abrí esta página en Safari</p>
-                  <p className="text-xs" style={{ color: COLORS.gray }}>
-                    En iPhone la app solo se instala desde <b>Safari</b>. Tocá los <b>···</b> o el botón de compartir y elegí <b>“Abrir en Safari”</b>, y volvé a esta pantalla.
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <p className="text-sm font-semibold mb-3 text-center" style={{ color: COLORS.grayDark }}>Instalala en tu iPhone en 3 pasos</p>
-                  <div className="space-y-3">
-                    {[
-                      { n: '1', t: <>Tocá el botón <b>Compartir</b> en la barra de abajo</>, i: (
-                        <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke={COLORS.green} strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M12 16V4m0 0L8 8m4-4l4 4M6 12v6a2 2 0 002 2h8a2 2 0 002-2v-6" /></svg>
-                      ) },
-                      { n: '2', t: <>Deslizá y elegí <b>“Agregar a inicio”</b></>, i: (
-                        <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke={COLORS.green} strokeWidth={1.8}><rect x="4" y="4" width="16" height="16" rx="4" /><path strokeLinecap="round" d="M12 8v8M8 12h8" /></svg>
-                      ) },
-                      { n: '3', t: <>Confirmá <b>“Agregar”</b> arriba a la derecha</>, i: (
-                        <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke={COLORS.green} strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                      ) },
-                    ].map(p => (
-                      <div key={p.n} className="flex items-center gap-3">
-                        <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ backgroundColor: COLORS.greenLight, color: COLORS.greenDark }}>{p.n}</span>
-                        <span className="text-sm flex-1" style={{ color: COLORS.grayDark }}>{p.t}</span>
-                        <span className="flex-shrink-0">{p.i}</span>
-                      </div>
-                    ))}
+              <p className="text-sm font-semibold mb-3 text-center" style={{ color: COLORS.grayDark }}>Instalala en tu iPhone en 3 pasos</p>
+              <div className="space-y-3">
+                {[
+                  { n: '1', t: <>Tocá <b>Compartir</b> (la barra de abajo en Safari, o el menú <b>···</b> en Chrome)</>, i: (
+                    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke={COLORS.green} strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M12 16V4m0 0L8 8m4-4l4 4M6 12v6a2 2 0 002 2h8a2 2 0 002-2v-6" /></svg>
+                  ) },
+                  { n: '2', t: <>Deslizá y elegí <b>“Agregar a inicio”</b></>, i: (
+                    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke={COLORS.green} strokeWidth={1.8}><rect x="4" y="4" width="16" height="16" rx="4" /><path strokeLinecap="round" d="M12 8v8M8 12h8" /></svg>
+                  ) },
+                  { n: '3', t: <>Confirmá <b>“Agregar”</b> arriba a la derecha</>, i: (
+                    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke={COLORS.green} strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                  ) },
+                ].map(p => (
+                  <div key={p.n} className="flex items-center gap-3">
+                    <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ backgroundColor: COLORS.greenLight, color: COLORS.greenDark }}>{p.n}</span>
+                    <span className="text-sm flex-1" style={{ color: COLORS.grayDark }}>{p.t}</span>
+                    <span className="flex-shrink-0">{p.i}</span>
                   </div>
-                  <p className="text-[11px] mt-3 text-center" style={{ color: COLORS.grayMid }}>
-                    Queda con el ícono de Safety Services, como una app más.
-                  </p>
-                </>
-              )}
+                ))}
+              </div>
+              <p className="text-[11px] mt-3 text-center" style={{ color: COLORS.grayMid }}>
+                Queda con el ícono de Safety Services, como una app más.
+              </p>
             </div>
           ) : (
             <button onClick={instalar} disabled={!deferred}

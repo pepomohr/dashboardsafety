@@ -63,7 +63,7 @@ function dbToEmpresa(e: any, sucs: any[] = []): Empresa {
     id: e.id, name: e.name, slug: e.slug, color: e.color || '#6FB63F',
     rubro: e.rubro || 'Sin especificar', sede: e.sede || 'Sin sede', isClient: !!e.is_client,
     logoUrl: e.logo_url || undefined, severidad: 0, factor: 0,
-    sucursalesSeparadas: !!e.sucursales_separadas, trabajadores: e.trabajadores ?? undefined,
+    sucursalesSeparadas: !!e.sucursales_separadas, trabajadores: e.trabajadores ?? undefined, token: e.token ?? undefined,
     sucursales: sucs.length ? sucs.map(s => ({ id: s.id, name: s.name, severidad: 0, factor: 0, trabajadores: s.trabajadores ?? undefined })) : undefined,
   }
 }
@@ -412,7 +412,7 @@ function AdminPanel() {
     <div className="min-h-screen flex" style={{ backgroundColor: COLORS.bg }}>
       <Sidebar items={NAV} active="clientes" onChange={() => setSelected(null)} role="Administrador" empresa="Safety Services"
         open={navOpen} onClose={() => setNavOpen(false)}
-        extra={selected ? <EnviarAppButton slug={selected.slug} sucursal={branch?.id ?? undefined} /> : undefined} />
+        extra={selected ? <EnviarAppButton slug={selected.slug} token={selected.token} sucursal={branch?.id ?? undefined} /> : undefined} />
 
       <div className="flex-1 min-w-0 flex flex-col">
         {/* TOP BAR */}

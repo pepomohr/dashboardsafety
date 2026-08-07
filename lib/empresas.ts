@@ -22,6 +22,7 @@ export interface Empresa {
   sucursales?: Sucursal[]  // si la empresa tiene varias sedes con datos distintos
   sucursalesSeparadas?: boolean  // true = cada sucursal se muestra como su propia tarjeta
   trabajadores?: number    // dotación de personal (para el índice de incidencia)
+  token?: string           // token secreto para el link del cliente
 }
 
 export const empresas: Empresa[] = [
