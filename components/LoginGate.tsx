@@ -48,7 +48,7 @@ export default function LoginGate({ children, requireAdmin = false }: { children
           <p className="font-display text-xl font-extrabold mt-3">
             <span style={{ color: COLORS.green }}>Safety</span> <span style={{ color: COLORS.gray }}>Services</span>
           </p>
-          <p className="text-sm mt-1" style={{ color: COLORS.gray }}>Panel de administración</p>
+          <p className="text-sm mt-1" style={{ color: COLORS.gray }}>{requireAdmin ? 'Panel de administración' : 'Acceso de cliente'}</p>
         </div>
 
         {status === 'denied' ? (

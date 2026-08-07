@@ -6,21 +6,16 @@ import {
   AreaChart, Area, CartesianGrid, Legend, PieChart, Pie, LineChart, Line, ReferenceLine, LabelList,
 } from 'recharts'
 import { COLORS, statusStyle } from '@/lib/theme'
-import {
-  documents, DocItem, PART_LABELS,
-  accidentesPorTurno, diagnosticos, investigacion,
-  gravedadLesiones, circunstancia, causas, origen, accidentesPorPuesto, diasPerdidos, indiceComparado,
-} from '@/lib/mockData'
-import {
-  Empresa, Sucursal,
-  empresaDocs, empresaAccidentesPorMes, empresaAccidentesPorArea, empresaPartes, empresaIndices,
-} from '@/lib/empresas'
+import { documents, DocItem, PART_LABELS } from '@/lib/mockData'
+import { Empresa, Sucursal } from '@/lib/empresas'
 import {
   supabase, uploadLogo, supabaseReady, signOut,
   listTipos, listDocumentos, crearDocumento, borrarDocumento, uploadDocumento, urlDocumento, borrarEmpresa,
   crearSucursal, borrarSucursal, setSucursalesSeparadas,
+  listAccidentes, AccRow,
   DocRow,
 } from '@/lib/supabase'
+import { agregarAccidentes } from '@/lib/dashboard'
 import LoginGate from '@/components/LoginGate'
 import Card from '@/components/Card'
 import Gauge from '@/components/Gauge'
@@ -68,8 +63,8 @@ function dbToEmpresa(e: any, sucs: any[] = []): Empresa {
     id: e.id, name: e.name, slug: e.slug, color: e.color || '#6FB63F',
     rubro: e.rubro || 'Sin especificar', sede: e.sede || 'Sin sede', isClient: !!e.is_client,
     logoUrl: e.logo_url || undefined, severidad: 0, factor: 0,
-    sucursalesSeparadas: !!e.sucursales_separadas,
-    sucursales: sucs.length ? sucs.map(s => ({ id: s.id, name: s.name, severidad: 0, factor: 0 })) : undefined,
+    sucursalesSeparadas: !!e.sucursales_separadas, trabajadores: e.trabajadores ?? undefined,
+    sucursales: sucs.length ? sucs.map(s => ({ id: s.id, name: s.name, severidad: 0, factor: 0, trabajadores: s.trabajadores ?? undefined })) : undefined,
   }
 }
 
@@ -103,6 +98,7 @@ function AdminPanel() {
   const [selected, setSelected] = useState<Empresa | null>(null)
   const [tab, setTab] = useState<'dashboard' | 'carga' | 'accidentes'>('dashboard')
   const [docsState, setDocsState] = useState<DocUI[]>([])
+  const [accsState, setAccsState] = useState<AccRow[]>([])
   const [docsCargando, setDocsCargando] = useState(false)
   const [tipos, setTipos] = useState<string[]>(DOC_TYPES)
   const [stats, setStats] = useState<Record<string, DocStats>>({})
@@ -122,6 +118,7 @@ function AdminPanel() {
   const [fSede, setFSede] = useState('')
   const [fColor, setFColor] = useState(COLOR_SWATCHES[0])
   const [fClient, setFClient] = useState(true)
+  const [fTrab, setFTrab] = useState('')
   const [fLogo, setFLogo] = useState<string | null>(null)       // vista previa (data URL)
   const [fLogoFile, setFLogoFile] = useState<File | null>(null) // archivo real (para subir a Supabase)
   const [creando, setCreando] = useState(false)
@@ -188,6 +185,13 @@ function AdminPanel() {
     setDocsCargando(false)
   }
 
+  /** Trae de la base los accidentes de la empresa/sucursal elegida. */
+  async function recargarAccs(empresa: Empresa, sucId: string | null) {
+    if (!supabaseReady) { setAccsState([]); return }
+    const rows = await listAccidentes(empresa.id, sucId)
+    setAccsState(rows)
+  }
+
   function onLogoFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -205,12 +209,14 @@ function AdminPanel() {
     setSucursalId(sucId)
     setUploadOk(false)
     recargarDocs(e, sucId)
+    recargarAccs(e, sucId)
   }
 
   function changeSucursal(e: Empresa, id: string | null) {
     setSucursalId(id)
     setUploadOk(false)
     recargarDocs(e, id)
+    recargarAccs(e, id)
   }
 
   /** Agrega una sucursal a la empresa abierta. */
@@ -290,7 +296,7 @@ function AdminPanel() {
     if (supabaseReady && supabase) {
       // Guardar en la base de datos
       const { data, error } = await supabase.from('empresas')
-        .insert({ name: fName.trim(), slug, color: fColor, rubro: fRubro.trim() || 'Sin especificar', sede: fSede.trim() || 'Sin sede', is_client: fClient, logo_url: logoUrl })
+        .insert({ name: fName.trim(), slug, color: fColor, rubro: fRubro.trim() || 'Sin especificar', sede: fSede.trim() || 'Sin sede', is_client: fClient, logo_url: logoUrl, trabajadores: fTrab ? Number(fTrab) : null })
         .select().single()
       if (error || !data) { await avisar('No se pudo crear el cliente', error?.message || 'Probá de nuevo en unos segundos.'); setCreando(false); return }
       setEmpresasList(l => [dbToEmpresa(data, []), ...l])
@@ -304,7 +310,7 @@ function AdminPanel() {
       setEmpresasList(l => [nueva, ...l])
     }
     setCreateOpen(false)
-    setFName(''); setFRubro(''); setFSede(''); setFColor(COLOR_SWATCHES[0]); setFClient(true); setFLogo(null); setFLogoFile(null)
+    setFName(''); setFRubro(''); setFSede(''); setFColor(COLOR_SWATCHES[0]); setFClient(true); setFLogo(null); setFLogoFile(null); setFTrab('')
     setCreando(false)
   }
 
@@ -620,8 +626,8 @@ function AdminPanel() {
                 ))}
               </div>
 
-              {tab === 'dashboard' && <EmpresaDashboard factor={activeFactor} docs={docsState} />}
-              {tab === 'accidentes' && <CargaAccidentes color={selected.color} />}
+              {tab === 'dashboard' && <EmpresaDashboard docs={docsState} accs={accsState} trabajadores={branch?.trabajadores ?? selected.trabajadores ?? null} />}
+              {tab === 'accidentes' && <CargaAccidentes color={selected.color} empresaId={selected.id} sucursalId={sucursalId} onChange={() => recargarAccs(selected, sucursalId)} />}
               {tab === 'carga' && (
                 <CargaDocumentacion docs={docsState} cargando={docsCargando} tipos={tipos}
                   tipo={dTipo} setTipo={setDTipo}
@@ -659,6 +665,9 @@ function AdminPanel() {
                   <input value={fSede} onChange={e => setFSede(e.target.value)} placeholder="Banfield" className="ss-input" style={{ color: COLORS.grayDark }} />
                 </Field>
               </div>
+              <Field label="Cantidad de trabajadores (para el índice de incidencia)">
+                <input type="number" min={0} value={fTrab} onChange={e => setFTrab(e.target.value)} placeholder="Ej: 45" className="ss-input" style={{ color: COLORS.grayDark }} />
+              </Field>
               <Field label="Color de marca">
                 <div className="flex gap-2 flex-wrap">
                   {COLOR_SWATCHES.map(c => (
@@ -715,8 +724,7 @@ function AdminPanel() {
 
       {/* ══════════ MODAL INFORME PDF (por empresa) ══════════ */}
       {informeOpen && selected && (() => {
-        const accMes = empresaAccidentesPorMes(activeFactor)
-        const totalAcc = accMes.reduce((s, m) => s + m.accidentes, 0)
+        const agInf = agregarAccidentes(accsState, null, branch?.trabajadores ?? selected.trabajadores ?? null)
         return (
           <div className="fixed inset-0 z-[100] overflow-y-auto">
             <div className="no-print fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setInformeOpen(false)} />
@@ -734,8 +742,8 @@ function AdminPanel() {
                 </button>
               </div>
               <div className="bg-white rounded-xl shadow-2xl w-full max-w-[820px]">
-                <InformeReporte empresa={branch ? `${selected.name} — ${branch.name}` : selected.name} docs={docsState} accidentes={totalAcc}
-                  indices={empresaIndices(activeFactor)} porArea={empresaAccidentesPorArea(activeFactor)} />
+                <InformeReporte empresa={branch ? `${selected.name} — ${branch.name}` : selected.name} docs={docsState} accidentes={agInf.total}
+                  indices={{ frecuencia: 0, gravedad: 0, incidencia: agInf.incidencia ?? 0 }} porArea={agInf.porArea} />
               </div>
             </div>
           </div>
@@ -794,8 +802,12 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
+function SinDato() {
+  return <div className="h-[230px] flex items-center justify-center text-xs" style={{ color: COLORS.grayMid }}>Sin datos para este gráfico</div>
+}
+
 // ══════════════════════════ DASHBOARD DE LA EMPRESA ══════════════════════════
-function EmpresaDashboard({ factor, docs }: { factor: number; docs: DocUI[] }) {
+function EmpresaDashboard({ docs, accs, trabajadores }: { docs: DocUI[]; accs: AccRow[]; trabajadores: number | null }) {
   const total = docs.length
   const vig = docs.filter(d => d.status === 'valid').length
   const exp = docs.filter(d => d.status === 'expiring').length
@@ -806,14 +818,12 @@ function EmpresaDashboard({ factor, docs }: { factor: number; docs: DocUI[] }) {
   const daysTo = (iso: string) => Math.round((new Date(iso + 'T00:00:00').getTime() - today.getTime()) / 86400000)
   const urgente = docs.filter(d => d.expiry).map(d => ({ ...d, days: daysTo(d.expiry) })).sort((a, b) => a.days - b.days)[0]
 
-  const accMes = empresaAccidentesPorMes(factor)
-  const accArea = empresaAccidentesPorArea(factor)
-  const partes = empresaPartes(factor)
-  const idx = empresaIndices(factor)
-  const totalAcc = accMes.reduce((s, m) => s + m.accidentes, 0)
-  const sinInvestigar = Math.max(0, Math.round(5 * factor))
+  // ── Todo lo de siniestralidad sale de los accidentes REALES ──
+  const ag = agregarAccidentes(accs, null, trabajadores)
+  const totalAcc = ag.total
+  const sinInvestigar = ag.sinInvestigar
   const parteHeat = (c: number) => c <= 0 ? COLORS.grayLight : c <= 2 ? '#C7E3AC' : c <= 4 ? COLORS.warn : COLORS.danger
-  const partesList = Object.entries(partes).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1])
+  const partesList = Object.entries(ag.partes).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1])
 
   return (
     <div className="space-y-5">
@@ -825,7 +835,7 @@ function EmpresaDashboard({ factor, docs }: { factor: number; docs: DocUI[] }) {
             Atención:
             {ven > 0 && ` ${ven} documento${ven > 1 ? 's' : ''} vencido${ven > 1 ? 's' : ''}`}
             {ven > 0 && sinInvestigar > 0 && ' ·'}
-            {sinInvestigar > 0 && ` ${sinInvestigar} accidentes sin investigar`}
+            {sinInvestigar > 0 && ` ${sinInvestigar} accidente${sinInvestigar > 1 ? 's' : ''} sin investigar`}
           </p>
         </div>
       )}
@@ -834,7 +844,7 @@ function EmpresaDashboard({ factor, docs }: { factor: number; docs: DocUI[] }) {
       <div className="grid grid-cols-2 gap-4">
         {[
           { label: 'Accidentes acumulados', value: totalAcc, color: COLORS.grayDark },
-          { label: 'Índice de incidencia', value: idx.incidencia.toFixed(2), color: COLORS.warn },
+          { label: ag.incidencia !== null ? 'Índice de incidencia' : 'Sin investigar', value: ag.incidencia !== null ? ag.incidencia.toFixed(2) : sinInvestigar, color: COLORS.warn },
         ].map(k => (
           <div key={k.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 border-l-4" style={{ borderLeftColor: k.color }}>
             <p className="text-3xl font-bold" style={{ color: k.color }}>{k.value}</p>
@@ -847,7 +857,7 @@ function EmpresaDashboard({ factor, docs }: { factor: number; docs: DocUI[] }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <Card title="Accidentes por mes" className="lg:col-span-2">
           <ResponsiveContainer width="100%" height={240}>
-            <AreaChart data={accMes} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <AreaChart data={ag.porMes} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="aMes" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={COLORS.green} stopOpacity={0.4} />
@@ -917,107 +927,62 @@ function EmpresaDashboard({ factor, docs }: { factor: number; docs: DocUI[] }) {
       {/* Área + turno + tipo de lesión */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         <Card title="Accidentes por área">
+          {ag.porArea.length === 0 ? <SinDato /> : (
           <ResponsiveContainer width="100%" height={230}>
-            <BarChart data={accArea} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <BarChart data={ag.porArea} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false} />
               <XAxis dataKey="area" tick={{ fontSize: 11, fill: COLORS.gray }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 12, fill: COLORS.gray }} axisLine={false} tickLine={false} allowDecimals={false} />
               <Tooltip cursor={{ fill: '#f6f6f6' }} contentStyle={{ borderRadius: 12, border: '1px solid #eee', fontSize: 13 }} />
               <Bar dataKey="valor" name="Accidentes" radius={[6, 6, 0, 0]}>
-                {accArea.map((e, i) => <Cell key={i} fill={e.valor >= 10 ? COLORS.danger : e.valor >= 6 ? COLORS.warn : COLORS.green} />)}
+                {ag.porArea.map((e, i) => <Cell key={i} fill={e.valor >= 10 ? COLORS.danger : e.valor >= 6 ? COLORS.warn : COLORS.green} />)}
               </Bar>
             </BarChart>
-          </ResponsiveContainer>
+          </ResponsiveContainer>)}
         </Card>
         <Card title="Accidentes por turno">
+          {ag.porTurno.length === 0 ? <SinDato /> : (
           <ResponsiveContainer width="100%" height={230}>
-            <BarChart data={accidentesPorTurno} layout="vertical" margin={{ top: 10, right: 30, left: 10, bottom: 0 }}>
+            <BarChart data={ag.porTurno} layout="vertical" margin={{ top: 10, right: 30, left: 10, bottom: 0 }}>
               <XAxis type="number" hide />
               <YAxis type="category" dataKey="turno" tick={{ fontSize: 13, fill: COLORS.grayDark }} axisLine={false} tickLine={false} width={70} />
               <Tooltip formatter={(v: any) => `${v}%`} cursor={{ fill: '#f6f6f6' }} contentStyle={{ borderRadius: 12, border: '1px solid #eee', fontSize: 13 }} />
               <Bar dataKey="valor" radius={[0, 6, 6, 0]} barSize={26}>
-                {accidentesPorTurno.map((e, i) => <Cell key={i} fill={e.turno === 'Tarde' ? COLORS.green : COLORS.grayMid} />)}
+                {ag.porTurno.map((e, i) => <Cell key={i} fill={e.turno === 'Tarde' ? COLORS.green : COLORS.grayMid} />)}
                 <LabelList dataKey="valor" position="right" formatter={(v: any) => `${v}%`} style={{ fill: COLORS.grayDark, fontSize: 12, fontWeight: 700 }} />
               </Bar>
             </BarChart>
-          </ResponsiveContainer>
+          </ResponsiveContainer>)}
         </Card>
         <Card title="Tipo de lesión">
+          {ag.porLesion.length === 0 ? <SinDato /> : (
           <ResponsiveContainer width="100%" height={230}>
-            <BarChart data={diagnosticos} margin={{ top: 10, right: 10, left: -20, bottom: 30 }}>
+            <BarChart data={ag.porLesion} margin={{ top: 10, right: 10, left: -20, bottom: 30 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false} />
               <XAxis dataKey="tipo" tick={{ fontSize: 10, fill: COLORS.gray }} axisLine={false} tickLine={false} angle={-25} textAnchor="end" interval={0} />
               <YAxis tick={{ fontSize: 12, fill: COLORS.gray }} axisLine={false} tickLine={false} allowDecimals={false} />
               <Tooltip cursor={{ fill: '#f6f6f6' }} contentStyle={{ borderRadius: 12, border: '1px solid #eee', fontSize: 13 }} />
               <Bar dataKey="valor" name="Casos" radius={[6, 6, 0, 0]} fill={COLORS.green} barSize={24} />
             </BarChart>
-          </ResponsiveContainer>
+          </ResponsiveContainer>)}
         </Card>
       </div>
 
-      {/* Tortas — solo admin */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
-        <Card title="Gravedad de las lesiones"><Donut data={gravedadLesiones.map(d => ({ label: d.tipo, value: d.valor }))} /></Card>
-        <Card title="Circunstancia"><Donut data={circunstancia.map(d => ({ label: d.tipo, value: d.valor }))} /></Card>
-        <Card title="Causas"><Donut data={causas.map(d => ({ label: d.tipo, value: d.valor }))} /></Card>
-        <Card title="Origen del accidente"><Donut data={origen.map(d => ({ label: d.tipo, value: d.valor }))} /></Card>
-      </div>
-
-      {/* Investigación + índice comparado — solo admin */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      {/* Gravedad + investigación (tortas) — solo con datos reales */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <Card title="Gravedad de las lesiones">
+          {ag.gravedad.length === 0 ? <SinDato /> : <Donut data={ag.gravedad} />}
+        </Card>
         <Card title="Investigación de accidentes"
           action={<span className="text-xs px-2.5 py-1 rounded-full font-semibold" style={{ backgroundColor: '#FBE9E5', color: '#9A2A18' }}>{sinInvestigar} sin investigar</span>}>
-          <Donut data={investigacion.map(e => ({ label: e.estado, value: e.valor }))} />
-        </Card>
-        <Card title="Índice de incidencia — vs. límite admisible" className="lg:col-span-2"
-          action={<span className="text-xs px-2.5 py-1 rounded-full font-semibold" style={{ backgroundColor: '#FBE9E5', color: '#9A2A18' }}>Límite: 0,30</span>}>
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={indiceComparado} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false} />
-              <XAxis dataKey="mes" tick={{ fontSize: 12, fill: COLORS.gray }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 12, fill: COLORS.gray }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #eee', fontSize: 13 }} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <ReferenceLine y={0.30} stroke={COLORS.danger} strokeDasharray="6 4" />
-              <Line type="monotone" dataKey="limite" name="Límite admisible" stroke={COLORS.danger} strokeWidth={1.5} strokeDasharray="6 4" dot={false} />
-              <Line type="monotone" dataKey="cliente" name="Índice del cliente" stroke={COLORS.green} strokeWidth={2.5} dot={{ r: 3, fill: COLORS.green }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </Card>
-      </div>
-
-      {/* Días perdidos + puesto */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <Card title="Días perdidos por accidente">
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={diasPerdidos} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false} />
-              <XAxis dataKey="mes" tick={{ fontSize: 12, fill: COLORS.gray }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 12, fill: COLORS.gray }} axisLine={false} tickLine={false} allowDecimals={false} />
-              <Tooltip formatter={(v: any) => `${v} días`} contentStyle={{ borderRadius: 12, border: '1px solid #eee', fontSize: 13 }} />
-              <Line type="monotone" dataKey="dias" name="Días perdidos" stroke={COLORS.warn} strokeWidth={2.5} dot={{ r: 3, fill: COLORS.warn }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </Card>
-        <Card title="Accidentes por puesto de trabajo">
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={accidentesPorPuesto} layout="vertical" margin={{ top: 10, right: 24, left: 20, bottom: 0 }}>
-              <XAxis type="number" hide />
-              <YAxis type="category" dataKey="puesto" tick={{ fontSize: 12, fill: COLORS.grayDark }} axisLine={false} tickLine={false} width={120} />
-              <Tooltip cursor={{ fill: '#f6f6f6' }} contentStyle={{ borderRadius: 12, border: '1px solid #eee', fontSize: 13 }} />
-              <Bar dataKey="valor" name="Accidentes" radius={[0, 6, 6, 0]} barSize={20}>
-                {accidentesPorPuesto.map((e, i) => <Cell key={i} fill={e.valor >= 5 ? COLORS.danger : e.valor >= 3 ? COLORS.warn : COLORS.green} />)}
-                <LabelList dataKey="valor" position="right" style={{ fill: COLORS.grayDark, fontSize: 12, fontWeight: 700 }} />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          {ag.investigacion.length === 0 ? <SinDato /> : <Donut data={ag.investigacion} />}
         </Card>
       </div>
 
       {/* Cuerpo + detalle por zona */}
       <Card title="Partes del cuerpo afectadas">
         <div className="flex flex-col sm:flex-row gap-4 items-start">
-          <div className="flex-1 min-w-0 w-full"><BodyMap2 data={partes} /></div>
+          <div className="flex-1 min-w-0 w-full"><BodyMap2 data={ag.partes} /></div>
           <div className="w-full sm:w-48 flex-shrink-0">
             <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: COLORS.gray }}>Detalle por zona</p>
             <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">

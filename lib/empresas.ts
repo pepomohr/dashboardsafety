@@ -5,6 +5,7 @@ export interface Sucursal {
   name: string
   severidad: number
   factor: number
+  trabajadores?: number
 }
 
 export interface Empresa {
@@ -20,6 +21,7 @@ export interface Empresa {
   factor: number       // escala de accidentes para diferenciar empresas
   sucursales?: Sucursal[]  // si la empresa tiene varias sedes con datos distintos
   sucursalesSeparadas?: boolean  // true = cada sucursal se muestra como su propia tarjeta
+  trabajadores?: number    // dotación de personal (para el índice de incidencia)
 }
 
 export const empresas: Empresa[] = [

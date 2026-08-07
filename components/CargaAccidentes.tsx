@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import { COLORS } from '@/lib/theme'
 import { PART_LABELS } from '@/lib/mockData'
+import { supabaseReady, listAccidentes, crearAccidentes, borrarAccidente, AccRow } from '@/lib/supabase'
 import BodyMap2 from './BodyMap2'
 import Card from './Card'
 
@@ -68,11 +69,40 @@ function gravStyle(v: string) {
   return { bg: '#FBE9E5', text: '#9A2A18', hex: COLORS.danger }
 }
 
-export default function CargaAccidentes({ color }: { color: string }) {
+// AccRow (de la base) → Accidente (para la lista)
+function rowToAcc(r: AccRow): Accidente {
+  return {
+    id: r.id as any, fecha: r.fecha || '', hora: r.hora || '', turno: r.turno || '',
+    area: r.area || '', parteKey: r.parte_cuerpo && PART_LABELS[r.parte_cuerpo] ? r.parte_cuerpo : '',
+    parteLabel: r.parte_cuerpo && !PART_LABELS[r.parte_cuerpo] ? r.parte_cuerpo : undefined,
+    cantidad: r.cantidad, gravedad: r.gravedad || 'Moderada', lesion: r.lesion || '—',
+    detalle: '', investigacion: r.investigacion || 'No realizada', descripcion: r.descripcion || '',
+  }
+}
+
+export default function CargaAccidentes({ color, empresaId, sucursalId, onChange }: {
+  color: string
+  empresaId?: string
+  sucursalId?: string | null
+  onChange?: () => void
+}) {
   const [modo, setModo] = useState<'form' | 'mapa'>('mapa')
   const [list, setList] = useState<Accidente[]>([])
+  const [cargando, setCargando] = useState(false)
+  const [guardando, setGuardando] = useState(false)
   const [ok, setOk] = useState(false)
   const [importMsg, setImportMsg] = useState<{ text: string; tone: 'ok' | 'warn' } | null>(null)
+
+  // Traer de la base los accidentes de esta empresa/sucursal
+  useEffect(() => {
+    if (!supabaseReady || !empresaId) { setList([]); return }
+    let vivo = true
+    setCargando(true)
+    listAccidentes(empresaId, sucursalId ?? null).then(rows => {
+      if (vivo) { setList(rows.map(rowToAcc)); setCargando(false) }
+    })
+    return () => { vivo = false }
+  }, [empresaId, sucursalId])
 
   const [fecha, setFecha] = useState('')
   const [hora, setHora] = useState('')
@@ -108,19 +138,47 @@ export default function CargaAccidentes({ color }: { color: string }) {
     setLesion(''); setDetalle(''); setInvestigacion('No realizada'); setDescripcion(''); setGravedad('Moderada'); setTally({})
   }
 
-  function guardar() {
-    const base = { fecha, hora, turno, area, gravedad, lesion: lesion || '—', detalle: lesion === 'Otro' ? detalle : '', investigacion, descripcion }
+  // Convierte los campos del form en filas para la base
+  function filasParaGuardar() {
+    const lesionFinal = lesion === 'Otro' ? (detalle || 'Otro') : lesion
+    const comun = { fecha, hora, turno, area, gravedad, lesion: lesionFinal, investigacion, descripcion }
     if (modo === 'form') {
-      if (!fecha || !parteKey || !lesion) return
-      setList(l => [{ id: Date.now(), parteKey, ...base }, ...l])
+      return [{ ...comun, parte_cuerpo: parteKey, cantidad: 1 }]
+    }
+    return Object.entries(tally).map(([key, n]) => ({ ...comun, parte_cuerpo: key, cantidad: n }))
+  }
+
+  async function guardar() {
+    if (guardando || !canSave) return
+    const filas = filasParaGuardar()
+
+    if (supabaseReady && empresaId) {
+      setGuardando(true)
+      const creados = await crearAccidentes(empresaId, sucursalId ?? null, filas)
+      setGuardando(false)
+      if (!creados) { setImportMsg({ text: 'No se pudo guardar el accidente. Probá de nuevo.', tone: 'warn' }); return }
+      setList(l => [...creados.map(rowToAcc), ...l])
+      onChange?.()
     } else {
-      if (!fecha || tallyTotal === 0) return
-      const nuevos: Accidente[] = Object.entries(tally).map(([key, n], i) => ({
-        id: Date.now() + i, parteKey: key, cantidad: n, ...base,
+      // Sin base (maqueta local)
+      const nuevos: Accidente[] = filas.map((f, i) => ({
+        id: (Date.now() + i) as any, fecha: f.fecha, hora: f.hora, turno: f.turno, area: f.area,
+        parteKey: f.parte_cuerpo, cantidad: f.cantidad, gravedad: f.gravedad, lesion: f.lesion,
+        detalle: '', investigacion: f.investigacion, descripcion: f.descripcion,
       }))
       setList(l => [...nuevos, ...l])
     }
     setOk(true); resetCampos(); setTimeout(() => setOk(false), 2500)
+  }
+
+  async function eliminar(a: Accidente) {
+    const id = String(a.id)
+    if (supabaseReady && id.length > 20) {   // id de la base (uuid) vs id local (timestamp)
+      const okDel = await borrarAccidente(id)
+      if (!okDel) { setImportMsg({ text: 'No se pudo eliminar el accidente.', tone: 'warn' }); return }
+      onChange?.()
+    }
+    setList(l => l.filter(x => x.id !== a.id))
   }
 
   function importExcel(e: React.ChangeEvent<HTMLInputElement>) {
@@ -147,8 +205,22 @@ export default function CargaAccidentes({ color }: { color: string }) {
           })
         }
         if (!mapped.length) { setImportMsg({ text: `No reconocimos columnas de accidentes. Columnas del archivo: ${Object.keys(rows[0]).join(', ')}`, tone: 'warn' }); return }
-        setList(l => [...mapped, ...l])
-        setImportMsg({ text: `Importados ${mapped.length} accidentes desde "${file.name}".`, tone: 'ok' })
+        if (supabaseReady && empresaId) {
+          const filas = mapped.map(m => ({
+            fecha: m.fecha, hora: m.hora, turno: m.turno, area: m.area,
+            parte_cuerpo: m.parteKey || m.parteLabel || null, lesion: m.lesion,
+            gravedad: m.gravedad, investigacion: m.investigacion, descripcion: m.descripcion, cantidad: 1,
+          }))
+          crearAccidentes(empresaId, sucursalId ?? null, filas).then(creados => {
+            if (!creados) { setImportMsg({ text: 'No se pudieron guardar los accidentes importados.', tone: 'warn' }); return }
+            setList(l => [...creados.map(rowToAcc), ...l])
+            setImportMsg({ text: `Importados y guardados ${creados.length} accidentes desde "${file.name}".`, tone: 'ok' })
+            onChange?.()
+          })
+        } else {
+          setList(l => [...mapped, ...l])
+          setImportMsg({ text: `Importados ${mapped.length} accidentes desde "${file.name}".`, tone: 'ok' })
+        }
       } catch { setImportMsg({ text: 'No se pudo leer el archivo. ¿Es un Excel (.xlsx) o CSV válido?', tone: 'warn' }) }
     }
     reader.readAsArrayBuffer(file); e.target.value = ''
@@ -290,8 +362,8 @@ export default function CargaAccidentes({ color }: { color: string }) {
 
             <Field label="Descripción / observaciones"><textarea value={descripcion} onChange={e => setDescripcion(e.target.value)} rows={2} placeholder="¿Cómo ocurrió?" className="ss-input2 resize-none" style={{ color: COLORS.grayDark }} /></Field>
 
-            <button onClick={guardar} disabled={!canSave} className="w-full py-3 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-50" style={{ backgroundColor: color }}>
-              {modo === 'mapa' && tallyTotal > 0 ? `Registrar ${tallyTotal} ${tallyTotal === 1 ? 'lesión' : 'lesiones'}` : 'Registrar accidente'}
+            <button onClick={guardar} disabled={!canSave || guardando} className="w-full py-3 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-50" style={{ backgroundColor: color }}>
+              {guardando ? 'Guardando…' : modo === 'mapa' && tallyTotal > 0 ? `Registrar ${tallyTotal} ${tallyTotal === 1 ? 'lesión' : 'lesiones'}` : 'Registrar accidente'}
             </button>
           </div>
         </Card>
@@ -300,7 +372,9 @@ export default function CargaAccidentes({ color }: { color: string }) {
       {/* Lista */}
       <div className="lg:col-span-2">
         <Card title="Accidentes registrados" action={<span className="text-xs" style={{ color: COLORS.gray }}>{list.length}</span>}>
-          {list.length === 0 ? (
+          {cargando ? (
+            <p className="text-sm py-10 text-center" style={{ color: COLORS.gray }}>Cargando accidentes…</p>
+          ) : list.length === 0 ? (
             <div className="py-10 flex flex-col items-center gap-2 text-center">
               <svg className="w-9 h-9" fill="none" viewBox="0 0 24 24" stroke={COLORS.grayLight} strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
               <p className="text-sm" style={{ color: COLORS.gray }}>Todavía no cargaste accidentes</p>
@@ -313,10 +387,15 @@ export default function CargaAccidentes({ color }: { color: string }) {
                 return (
                   <div key={a.id} className="rounded-xl border border-gray-100 p-3">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-semibold" style={{ color: COLORS.grayDark }}>
+                      <p className="text-sm font-semibold min-w-0 truncate" style={{ color: COLORS.grayDark }}>
                         {(a.parteKey ? PART_LABELS[a.parteKey] : a.parteLabel) || '—'}{a.cantidad && a.cantidad > 1 ? ` ×${a.cantidad}` : ''} · {a.lesion === 'Otro' ? a.detalle || 'Otro' : a.lesion}
                       </p>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ backgroundColor: g.bg, color: g.text }}>{a.gravedad}</span>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: g.bg, color: g.text }}>{a.gravedad}</span>
+                        <button onClick={() => eliminar(a)} title="Eliminar" className="p-1 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50">
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M4 7h16" /></svg>
+                        </button>
+                      </div>
                     </div>
                     <div className="flex items-center justify-between gap-2 mt-1">
                       <p className="text-xs" style={{ color: COLORS.gray }}>{fmtDate(a.fecha)}{a.hora && ` · ${a.hora}`}{a.turno && ` · ${a.turno}`}{a.area && ` · ${a.area}`}</p>

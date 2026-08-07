@@ -86,6 +86,35 @@ export async function listDocumentos(empresaId: string, sucursalId?: string | nu
   }))
 }
 
+/** Todos los documentos de la empresa (todas las sucursales) — para la vista del cliente. */
+export async function listDocumentosEmpresa(empresaId: string): Promise<DocRow[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase.from('documentos')
+    .select('id, tipo, fecha_emision, fecha_vencimiento, archivo_url, nota')
+    .eq('empresa_id', empresaId)
+    .order('fecha_vencimiento', { ascending: true, nullsFirst: false })
+  if (error) { console.error('listDocumentosEmpresa:', error.message); return [] }
+  return (data || []).map((d: any) => ({
+    id: d.id, tipo: d.tipo, fecha_emision: d.fecha_emision,
+    fecha_vencimiento: d.fecha_vencimiento, archivo_path: d.archivo_url, nota: d.nota,
+  }))
+}
+
+/** Empresa por slug (con sus sucursales). Devuelve null si no existe o no hay acceso. */
+export async function getEmpresaBySlug(slug: string): Promise<any | null> {
+  if (!supabase) return null
+  const { data, error } = await supabase.from('empresas').select('*').eq('slug', slug).maybeSingle()
+  if (error || !data) { if (error) console.error('getEmpresaBySlug:', error.message); return null }
+  return data
+}
+
+/** Empresa por id. */
+export async function getEmpresaById(id: string): Promise<any | null> {
+  if (!supabase) return null
+  const { data } = await supabase.from('empresas').select('*').eq('id', id).maybeSingle()
+  return data || null
+}
+
 /**
  * Sube el archivo de un documento al bucket privado "documentos".
  * La ruta arranca con el id de la empresa: así el cliente solo accede a lo suyo.
@@ -136,6 +165,69 @@ export async function borrarDocumento(id: string, archivoPath?: string | null): 
   const { error } = await supabase.from('documentos').delete().eq('id', id)
   if (error) { console.error('borrarDocumento:', error.message); return false }
   if (archivoPath) await supabase.storage.from('documentos').remove([archivoPath])
+  return true
+}
+
+// ── Accidentes ──
+export interface AccRow {
+  id: string
+  fecha: string | null
+  hora: string | null
+  turno: string | null
+  area: string | null
+  parte_cuerpo: string | null
+  lesion: string | null
+  gravedad: string | null
+  investigacion: string | null
+  descripcion: string | null
+  cantidad: number
+}
+
+export async function listAccidentes(empresaId: string, sucursalId?: string | null): Promise<AccRow[]> {
+  if (!supabase) return []
+  let q = supabase.from('accidentes')
+    .select('id, fecha, hora, turno, area, parte_cuerpo, lesion, gravedad, investigacion, descripcion, cantidad')
+    .eq('empresa_id', empresaId)
+  q = sucursalId ? q.eq('sucursal_id', sucursalId) : q.is('sucursal_id', null)
+  const { data, error } = await q.order('fecha', { ascending: false, nullsFirst: false })
+  if (error) { console.error('listAccidentes:', error.message); return [] }
+  return (data || []) as AccRow[]
+}
+
+/** Inserta uno o varios accidentes (el mapa corporal manda varios de una). */
+export async function crearAccidentes(empresaId: string, sucursalId: string | null, filas: Array<{
+  fecha?: string | null; hora?: string | null; turno?: string | null; area?: string | null
+  parte_cuerpo?: string | null; lesion?: string | null; gravedad?: string | null
+  investigacion?: string | null; descripcion?: string | null; cantidad?: number
+}>): Promise<AccRow[] | null> {
+  if (!supabase) return null
+  const payload = filas.map(f => ({
+    empresa_id: empresaId, sucursal_id: sucursalId || null,
+    fecha: f.fecha || null, hora: f.hora || null, turno: f.turno || null, area: f.area || null,
+    parte_cuerpo: f.parte_cuerpo || null, lesion: f.lesion || null, gravedad: f.gravedad || null,
+    investigacion: f.investigacion || 'No realizada', descripcion: f.descripcion || null,
+    cantidad: f.cantidad && f.cantidad > 0 ? f.cantidad : 1,
+  }))
+  const { data, error } = await supabase.from('accidentes').insert(payload).select()
+  if (error || !data) { console.error('crearAccidentes:', error?.message); return null }
+  return data as AccRow[]
+}
+
+/** Todos los accidentes de la empresa (todas las sucursales) — para la vista del cliente. */
+export async function listAccidentesEmpresa(empresaId: string): Promise<AccRow[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase.from('accidentes')
+    .select('id, fecha, hora, turno, area, parte_cuerpo, lesion, gravedad, investigacion, descripcion, cantidad')
+    .eq('empresa_id', empresaId)
+    .order('fecha', { ascending: false, nullsFirst: false })
+  if (error) { console.error('listAccidentesEmpresa:', error.message); return [] }
+  return (data || []) as AccRow[]
+}
+
+export async function borrarAccidente(id: string): Promise<boolean> {
+  if (!supabase) return false
+  const { error } = await supabase.from('accidentes').delete().eq('id', id)
+  if (error) { console.error('borrarAccidente:', error.message); return false }
   return true
 }
 

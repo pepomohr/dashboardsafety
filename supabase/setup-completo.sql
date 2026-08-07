@@ -261,3 +261,8 @@ alter table public.documentos alter column tipo set not null;
 -- Columna: mostrar sucursales como tarjetas separadas
 alter table public.empresas
   add column if not exists sucursales_separadas boolean not null default false;
+
+-- (migración 04) Accidentes con datos reales
+alter table public.accidentes add column if not exists cantidad int not null default 1;
+alter table public.empresas   add column if not exists trabajadores int;
+alter table public.sucursales add column if not exists trabajadores int;
