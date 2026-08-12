@@ -103,19 +103,48 @@ export default function PreviewClienteDashboard() {
   const [sinAcceso, setSinAcceso] = useState(false)
 
   // Cargar los datos con el token secreto del link (?t=…). Sin login.
+  // El token se GUARDA en el dispositivo, así la app instalada (que abre sin el
+  // ?t=) sigue funcionando. Y se refresca solo (polling) para ver cambios en vivo.
   useEffect(() => {
-    (async () => {
-      if (!supabaseReady) { setCargando(false); return }
-      const token = new URLSearchParams(window.location.search).get('t')
-      if (!token) { setSinAcceso(true); setCargando(false); return }
-      const data = await datosCliente(token)
-      if (!data?.empresa) { setSinAcceso(true); setCargando(false); return }
+    if (!supabaseReady) { setCargando(false); return }
+
+    // 1) token del link, o el que quedó guardado de la última vez
+    const enUrl = new URLSearchParams(window.location.search).get('t')
+    let token = enUrl
+    try {
+      if (enUrl) localStorage.setItem('ss_token', enUrl)
+      else token = localStorage.getItem('ss_token')
+    } catch {}
+    if (!token) { setSinAcceso(true); setCargando(false); return }
+    const tk = token
+
+    let vivo = true
+    async function traer(primera: boolean) {
+      const data = await datosCliente(tk)
+      if (!vivo) return
+      if (!data?.empresa) {
+        if (primera) { setSinAcceso(true); setCargando(false) }
+        return
+      }
       setEmpresaName(data.empresa.name)
       setTrabajadores(data.empresa.trabajadores ?? null)
       setDocs(data.documentos)
       setAccs(data.accidentes)
-      setCargando(false)
-    })()
+      if (primera) setCargando(false)
+    }
+
+    traer(true)
+    // Refresco automático: cada 15s y cuando la app vuelve al frente
+    const intervalo = setInterval(() => traer(false), 15000)
+    const alVolver = () => { if (document.visibilityState === 'visible') traer(false) }
+    document.addEventListener('visibilitychange', alVolver)
+    window.addEventListener('focus', alVolver)
+    return () => {
+      vivo = false
+      clearInterval(intervalo)
+      document.removeEventListener('visibilitychange', alVolver)
+      window.removeEventListener('focus', alVolver)
+    }
   }, [])
 
   // Años disponibles según los accidentes reales
@@ -218,10 +247,13 @@ export default function PreviewClienteDashboard() {
                 {doc.archivo_path && (() => {
                   const url = urlPublicaDocumento(doc.archivo_path)
                   return url ? (
-                    <a href={url} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0" title="Ver / descargar documento">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke={COLORS.gray} strokeWidth={1.8}>
+                    <a href={url} target="_blank" rel="noopener noreferrer" download
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg flex-shrink-0 text-white text-xs font-semibold"
+                      style={{ backgroundColor: COLORS.green }} title="Descargar documento">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                       </svg>
+                      <span className="hidden sm:inline">Descargar</span>
                     </a>
                   ) : null
                 })()}

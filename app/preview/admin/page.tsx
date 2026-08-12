@@ -1042,10 +1042,12 @@ function CargaDocumentacion({
           )}
           <div className="space-y-4">
             <Field label="Tipo de documento *">
-              <select value={tipo} onChange={e => setTipo(e.target.value)} className="ss-input" style={{ color: COLORS.grayDark, background: '#fff' }}>
-                <option value="">Seleccioná el tipo…</option>
-                {tipos.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+              {/* Elegí uno de la lista o escribí uno nuevo */}
+              <input list="tipos-doc" value={tipo} onChange={e => setTipo(e.target.value)}
+                placeholder="Elegí de la lista o escribí uno nuevo…" className="ss-input" style={{ color: COLORS.grayDark }} />
+              <datalist id="tipos-doc">
+                {tipos.map(t => <option key={t} value={t} />)}
+              </datalist>
             </Field>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Fecha del estudio">
