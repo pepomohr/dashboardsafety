@@ -8,7 +8,7 @@ import {
 import { COLORS, statusStyle } from '@/lib/theme'
 import { PART_LABELS, DocItem } from '@/lib/mockData'
 import {
-  supabaseReady, datosCliente, DocRow, AccRow,
+  supabaseReady, datosCliente, urlPublicaDocumento, DocRow, AccRow,
 } from '@/lib/supabase'
 import { agregarAccidentes } from '@/lib/dashboard'
 import BodyMap2 from '@/components/BodyMap2'
@@ -215,6 +215,16 @@ export default function PreviewClienteDashboard() {
                   )}
                 </div>
                 <span className="text-xs font-semibold px-2.5 py-1 rounded-full flex-shrink-0" style={{ backgroundColor: s.bg, color: s.text }}>{s.label}</span>
+                {doc.archivo_path && (() => {
+                  const url = urlPublicaDocumento(doc.archivo_path)
+                  return url ? (
+                    <a href={url} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0" title="Ver / descargar documento">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke={COLORS.gray} strokeWidth={1.8}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                    </a>
+                  ) : null
+                })()}
               </div>
             )
           })}

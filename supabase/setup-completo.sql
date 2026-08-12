@@ -165,7 +165,7 @@ create trigger on_auth_user_created after insert on auth.users
 -- ============================================================
 insert into storage.buckets (id, name, public) values ('logos', 'logos', true)
   on conflict (id) do nothing;
-insert into storage.buckets (id, name, public) values ('documentos', 'documentos', false)
+insert into storage.buckets (id, name, public) values ('documentos', 'documentos', true)
   on conflict (id) do nothing;
 
 -- logos: lectura pública; escritura solo admin
@@ -275,7 +275,7 @@ returns jsonb language sql stable security definer set search_path = public as
 $fn$
   select case when e.id is null then null else jsonb_build_object(
     'empresa', jsonb_build_object('id', e.id, 'name', e.name, 'slug', e.slug, 'color', e.color, 'rubro', e.rubro, 'sede', e.sede, 'logo_url', e.logo_url, 'trabajadores', e.trabajadores),
-    'documentos', coalesce((select jsonb_agg(jsonb_build_object('id', d.id, 'tipo', d.tipo, 'fecha_emision', d.fecha_emision, 'fecha_vencimiento', d.fecha_vencimiento, 'nota', d.nota)) from public.documentos d where d.empresa_id = e.id), '[]'::jsonb),
+    'documentos', coalesce((select jsonb_agg(jsonb_build_object('id', d.id, 'tipo', d.tipo, 'fecha_emision', d.fecha_emision, 'fecha_vencimiento', d.fecha_vencimiento, 'nota', d.nota, 'archivo', d.archivo_url)) from public.documentos d where d.empresa_id = e.id), '[]'::jsonb),
     'accidentes', coalesce((select jsonb_agg(jsonb_build_object('id', a.id, 'fecha', a.fecha, 'hora', a.hora, 'turno', a.turno, 'area', a.area, 'parte_cuerpo', a.parte_cuerpo, 'lesion', a.lesion, 'gravedad', a.gravedad, 'investigacion', a.investigacion, 'descripcion', a.descripcion, 'cantidad', a.cantidad)) from public.accidentes a where a.empresa_id = e.id), '[]'::jsonb)
   ) end from public.empresas e where e.token = p_token
 $fn$;

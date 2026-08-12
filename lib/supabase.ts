@@ -129,10 +129,17 @@ export async function datosCliente(token: string): Promise<{ empresa: any; docum
     empresa: d.empresa,
     documentos: (d.documentos || []).map((x: any) => ({
       id: x.id, tipo: x.tipo, fecha_emision: x.fecha_emision,
-      fecha_vencimiento: x.fecha_vencimiento, archivo_path: null, nota: x.nota,
+      fecha_vencimiento: x.fecha_vencimiento, archivo_path: x.archivo ?? x.archivo_url ?? null, nota: x.nota,
     })),
     accidentes: (d.accidentes || []) as AccRow[],
   }
+}
+
+/** URL pública de un archivo del bucket de documentos (para abrir/descargar). */
+export function urlPublicaDocumento(path: string): string | null {
+  if (!supabase) return null
+  const { data } = supabase.storage.from('documentos').getPublicUrl(path)
+  return data.publicUrl
 }
 
 /**
