@@ -13,8 +13,10 @@ import { COLORS } from '@/lib/theme'
 export default function InstallGate({ children }: { children: ReactNode }) {
   const [deferred, setDeferred] = useState<any>(null)
   const [isIOS, setIsIOS] = useState(false)
+  const [iosNav, setIosNav] = useState<'safari' | 'chrome'>('safari')
   const [mostrar, setMostrar] = useState(false)
   const [guiaIOS, setGuiaIOS] = useState(false)
+  const [paso, setPaso] = useState(0)
 
   useEffect(() => {
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {})
@@ -22,6 +24,8 @@ export default function InstallGate({ children }: { children: ReactNode }) {
     const ua = navigator.userAgent || ''
     const ios = /iphone|ipad|ipod/i.test(ua) || (/Mac/.test(ua) && 'ontouchend' in document)
     setIsIOS(ios)
+    // Chrome en iOS = "CriOS"; el resto lo tratamos como Safari
+    setIosNav(/crios/i.test(ua) ? 'chrome' : 'safari')
 
     const standalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true
     const isMobile = /android|iphone|ipad|ipod/i.test(ua) || window.matchMedia('(max-width: 767px)').matches
@@ -43,6 +47,7 @@ export default function InstallGate({ children }: { children: ReactNode }) {
       if (res?.outcome === 'accepted') setMostrar(false)
       setDeferred(null)
     } else if (isIOS) {
+      setPaso(0)
       setGuiaIOS(true)
     }
   }
@@ -77,58 +82,62 @@ export default function InstallGate({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      {/* Guía iPhone: pasos GRANDES + flecha animada al botón Compartir (abajo) */}
-      {guiaIOS && (
-        <div className="fixed inset-0 z-[95] flex flex-col">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setGuiaIOS(false)} />
+      {/* Guía iPhone: carrusel de 4 fotos reales (Safari o Chrome, según detección) */}
+      {guiaIOS && (() => {
+        const pasos = [
+          { img: `/install/${iosNav}-1.jpg`, cap: 'Tocá el botón Compartir' },
+          { img: `/install/${iosNav}-2.jpg`, cap: 'Bajá y tocá “Agregar a inicio”' },
+          { img: `/install/${iosNav}-3.jpg`, cap: 'Tocá “Agregar” arriba a la derecha' },
+          { img: `/install/${iosNav}-4.jpg`, cap: '¡Listo! La app quedó en tu pantalla de inicio' },
+        ]
+        const ultimo = paso === pasos.length - 1
+        return (
+          <div className="fixed inset-0 z-[95] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setGuiaIOS(false)} />
+            <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-xs overflow-hidden flex flex-col" style={{ maxHeight: '92vh' }}>
+              <div className="px-5 pt-5 pb-3 text-center">
+                <h3 className="text-lg font-extrabold" style={{ color: COLORS.grayDark }}>Instalar en iPhone</h3>
+                <p className="text-xs mt-0.5" style={{ color: COLORS.gray }}>Paso {paso + 1} de {pasos.length} · {iosNav === 'chrome' ? 'Chrome' : 'Safari'}</p>
+              </div>
 
-          {/* Tarjeta con los pasos, grande y clara */}
-          <div className="relative m-4 mt-16 bg-white rounded-3xl shadow-2xl p-6">
-            <button onClick={() => { setGuiaIOS(false); cerrar() }} className="absolute top-3 right-3 p-2 rounded-lg hover:bg-gray-100" aria-label="Cerrar">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke={COLORS.gray} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="" className="w-14 h-14 mx-auto mb-3" />
-            <h3 className="text-xl font-extrabold text-center mb-1" style={{ color: COLORS.grayDark }}>Poné la app en tu inicio</h3>
-            <p className="text-sm text-center mb-5" style={{ color: COLORS.gray }}>Son 3 toques. Seguí la flecha 👇</p>
+              {/* Foto del paso */}
+              <div className="flex-1 min-h-0 px-5 flex items-center justify-center overflow-hidden">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={pasos[paso].img} alt={pasos[paso].cap}
+                  className="max-w-full rounded-xl border border-gray-100"
+                  style={{ maxHeight: '52vh', objectFit: 'contain' }}
+                  onError={e => { e.currentTarget.src = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='320'%3E%3Crect width='100%25' height='100%25' fill='%23f2f4f1'/%3E%3Ctext x='50%25' y='50%25' font-size='72' text-anchor='middle' fill='%236FB63F' font-family='sans-serif' dy='.35em'%3E${paso + 1}%3C/text%3E%3C/svg%3E` }} />
+              </div>
 
-            <div className="space-y-4">
-              <div className="flex items-center gap-4">
-                <span className="w-9 h-9 rounded-full flex items-center justify-center text-base font-extrabold flex-shrink-0" style={{ backgroundColor: COLORS.greenLight, color: COLORS.greenDark }}>1</span>
-                <p className="text-base flex-1" style={{ color: COLORS.grayDark }}>Tocá el botón <b>Compartir</b></p>
-                <span className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ border: `2px solid ${COLORS.green}` }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke={COLORS.green} strokeWidth="2" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M12 16V4m0 0L8 8m4-4l4 4M6 12v6a2 2 0 002 2h8a2 2 0 002-2v-6" /></svg>
-                </span>
+              <p className="px-6 pt-3 text-center text-sm font-semibold" style={{ color: COLORS.grayDark }}>{pasos[paso].cap}</p>
+
+              {/* Puntitos */}
+              <div className="flex justify-center gap-1.5 py-3">
+                {pasos.map((_, i) => (
+                  <button key={i} onClick={() => setPaso(i)} className="w-2 h-2 rounded-full transition-colors"
+                    style={{ backgroundColor: i === paso ? COLORS.green : '#D6DAD4' }} aria-label={`Paso ${i + 1}`} />
+                ))}
               </div>
-              <div className="flex items-center gap-4">
-                <span className="w-9 h-9 rounded-full flex items-center justify-center text-base font-extrabold flex-shrink-0" style={{ backgroundColor: COLORS.greenLight, color: COLORS.greenDark }}>2</span>
-                <p className="text-base flex-1" style={{ color: COLORS.grayDark }}>Bajá y tocá <b>“Agregar a inicio”</b></p>
-                <span className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ border: `2px solid ${COLORS.green}` }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke={COLORS.green} strokeWidth="2" className="w-6 h-6"><rect x="4" y="4" width="16" height="16" rx="4" /><path strokeLinecap="round" d="M12 8v8M8 12h8" /></svg>
-                </span>
+
+              {/* Navegación */}
+              <div className="px-5 pb-5 flex items-center gap-2">
+                {paso > 0 && (
+                  <button onClick={() => setPaso(p => p - 1)} className="px-4 py-2.5 rounded-xl text-sm font-semibold border border-gray-200" style={{ color: COLORS.gray }}>Atrás</button>
+                )}
+                {ultimo ? (
+                  <button onClick={() => { setGuiaIOS(false); cerrar() }} className="flex-1 py-2.5 rounded-xl text-white text-sm font-semibold" style={{ backgroundColor: COLORS.green }}>¡Listo!</button>
+                ) : (
+                  <button onClick={() => setPaso(p => p + 1)} className="flex-1 py-2.5 rounded-xl text-white text-sm font-semibold" style={{ backgroundColor: COLORS.green }}>Siguiente</button>
+                )}
               </div>
-              <div className="flex items-center gap-4">
-                <span className="w-9 h-9 rounded-full flex items-center justify-center text-base font-extrabold flex-shrink-0" style={{ backgroundColor: COLORS.greenLight, color: COLORS.greenDark }}>3</span>
-                <p className="text-base flex-1" style={{ color: COLORS.grayDark }}>Tocá <b>“Agregar”</b> arriba</p>
-                <span className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ border: `2px solid ${COLORS.green}` }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke={COLORS.green} strokeWidth="2.2" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                </span>
-              </div>
+
+              <button onClick={() => setGuiaIOS(false)} className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-gray-100" aria-label="Cerrar">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke={COLORS.gray} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
             </div>
           </div>
-
-          {/* Flecha animada apuntando al botón Compartir de Safari (abajo-centro) */}
-          <div className="relative mt-auto mb-2 flex flex-col items-center ss-bounce">
-            <span className="mb-1 px-3 py-1 rounded-full text-white text-xs font-bold" style={{ backgroundColor: COLORS.green }}>Compartir está acá</span>
-            <svg viewBox="0 0 24 24" fill={COLORS.green} className="w-10 h-10 drop-shadow-lg"><path d="M12 21l-8-9h5V3h6v9h5z" /></svg>
-          </div>
-
-          <style jsx>{`
-            .ss-bounce { animation: ssB 1s ease-in-out infinite; }
-            @keyframes ssB { 0%,100% { transform: translateY(0) } 50% { transform: translateY(10px) } }
-          `}</style>
-        </div>
-      )}
+        )
+      })()}
     </>
   )
 }
