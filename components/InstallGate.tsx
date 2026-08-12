@@ -66,9 +66,9 @@ export default function InstallGate({ children }: { children: ReactNode }) {
               <p className="text-xs" style={{ color: COLORS.gray }}>Accedé más rápido, como una app más.</p>
             </div>
             <button onClick={instalar}
-              className="flex-shrink-0 px-3.5 py-2 rounded-xl text-white text-sm font-semibold hover:opacity-90"
+              className="flex-shrink-0 px-4 py-2 rounded-xl text-white text-sm font-semibold hover:opacity-90"
               style={{ backgroundColor: COLORS.green }}>
-              {isIOS ? 'Cómo' : 'Instalar'}
+              Instalar
             </button>
             <button onClick={cerrar} className="flex-shrink-0 p-1.5 rounded-lg hover:bg-gray-100" aria-label="Cerrar">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke={COLORS.gray} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -77,26 +77,56 @@ export default function InstallGate({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      {/* Guía iPhone (Apple no deja instalar de un toque) */}
+      {/* Guía iPhone: pasos GRANDES + flecha animada al botón Compartir (abajo) */}
       {guiaIOS && (
-        <div className="fixed inset-0 z-[95] flex items-end sm:items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setGuiaIOS(false)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-5">
-            <p className="text-sm font-bold text-center mb-3" style={{ color: COLORS.grayDark }}>Instalala en tu iPhone</p>
-            <div className="space-y-3">
-              {[
-                { n: '1', t: <>Tocá <b>Compartir</b> (la barra de abajo, o el menú <b>···</b>)</> },
-                { n: '2', t: <>Elegí <b>“Agregar a inicio”</b></> },
-                { n: '3', t: <>Confirmá <b>“Agregar”</b></> },
-              ].map(p => (
-                <div key={p.n} className="flex items-center gap-3">
-                  <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ backgroundColor: COLORS.greenLight, color: COLORS.greenDark }}>{p.n}</span>
-                  <span className="text-sm" style={{ color: COLORS.grayDark }}>{p.t}</span>
-                </div>
-              ))}
+        <div className="fixed inset-0 z-[95] flex flex-col">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setGuiaIOS(false)} />
+
+          {/* Tarjeta con los pasos, grande y clara */}
+          <div className="relative m-4 mt-16 bg-white rounded-3xl shadow-2xl p-6">
+            <button onClick={() => { setGuiaIOS(false); cerrar() }} className="absolute top-3 right-3 p-2 rounded-lg hover:bg-gray-100" aria-label="Cerrar">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke={COLORS.gray} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.png" alt="" className="w-14 h-14 mx-auto mb-3" />
+            <h3 className="text-xl font-extrabold text-center mb-1" style={{ color: COLORS.grayDark }}>Poné la app en tu inicio</h3>
+            <p className="text-sm text-center mb-5" style={{ color: COLORS.gray }}>Son 3 toques. Seguí la flecha 👇</p>
+
+            <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                <span className="w-9 h-9 rounded-full flex items-center justify-center text-base font-extrabold flex-shrink-0" style={{ backgroundColor: COLORS.greenLight, color: COLORS.greenDark }}>1</span>
+                <p className="text-base flex-1" style={{ color: COLORS.grayDark }}>Tocá el botón <b>Compartir</b></p>
+                <span className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ border: `2px solid ${COLORS.green}` }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke={COLORS.green} strokeWidth="2" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M12 16V4m0 0L8 8m4-4l4 4M6 12v6a2 2 0 002 2h8a2 2 0 002-2v-6" /></svg>
+                </span>
+              </div>
+              <div className="flex items-center gap-4">
+                <span className="w-9 h-9 rounded-full flex items-center justify-center text-base font-extrabold flex-shrink-0" style={{ backgroundColor: COLORS.greenLight, color: COLORS.greenDark }}>2</span>
+                <p className="text-base flex-1" style={{ color: COLORS.grayDark }}>Bajá y tocá <b>“Agregar a inicio”</b></p>
+                <span className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ border: `2px solid ${COLORS.green}` }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke={COLORS.green} strokeWidth="2" className="w-6 h-6"><rect x="4" y="4" width="16" height="16" rx="4" /><path strokeLinecap="round" d="M12 8v8M8 12h8" /></svg>
+                </span>
+              </div>
+              <div className="flex items-center gap-4">
+                <span className="w-9 h-9 rounded-full flex items-center justify-center text-base font-extrabold flex-shrink-0" style={{ backgroundColor: COLORS.greenLight, color: COLORS.greenDark }}>3</span>
+                <p className="text-base flex-1" style={{ color: COLORS.grayDark }}>Tocá <b>“Agregar”</b> arriba</p>
+                <span className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ border: `2px solid ${COLORS.green}` }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke={COLORS.green} strokeWidth="2.2" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                </span>
+              </div>
             </div>
-            <button onClick={() => { setGuiaIOS(false); cerrar() }} className="mt-5 w-full py-2.5 rounded-xl text-white text-sm font-semibold" style={{ backgroundColor: COLORS.green }}>Entendido</button>
           </div>
+
+          {/* Flecha animada apuntando al botón Compartir de Safari (abajo-centro) */}
+          <div className="relative mt-auto mb-2 flex flex-col items-center ss-bounce">
+            <span className="mb-1 px-3 py-1 rounded-full text-white text-xs font-bold" style={{ backgroundColor: COLORS.green }}>Compartir está acá</span>
+            <svg viewBox="0 0 24 24" fill={COLORS.green} className="w-10 h-10 drop-shadow-lg"><path d="M12 21l-8-9h5V3h6v9h5z" /></svg>
+          </div>
+
+          <style jsx>{`
+            .ss-bounce { animation: ssB 1s ease-in-out infinite; }
+            @keyframes ssB { 0%,100% { transform: translateY(0) } 50% { transform: translateY(10px) } }
+          `}</style>
         </div>
       )}
     </>
