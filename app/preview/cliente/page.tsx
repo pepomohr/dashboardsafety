@@ -134,8 +134,9 @@ export default function PreviewClienteDashboard() {
     }
 
     traer(true)
-    // Refresco automático: cada 15s y cuando la app vuelve al frente
-    const intervalo = setInterval(() => traer(false), 15000)
+    // Refresco casi instantáneo: cada 5s, pero SOLO con la app al frente
+    // (no gasta batería/datos en segundo plano). Al volver, refresca al toque.
+    const intervalo = setInterval(() => { if (document.visibilityState === 'visible') traer(false) }, 5000)
     const alVolver = () => { if (document.visibilityState === 'visible') traer(false) }
     document.addEventListener('visibilitychange', alVolver)
     window.addEventListener('focus', alVolver)
