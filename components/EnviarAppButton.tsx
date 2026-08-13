@@ -12,10 +12,10 @@ export default function EnviarAppButton({ slug, token, sucursal }: { slug: strin
 
   async function copy() {
     const origin = typeof window !== 'undefined' ? window.location.origin : ''
-    // Link con token secreto (acceso sin contraseña). Si todavía no hay token
-    // (maqueta sin base), cae al viejo formato por slug.
+    // Link con token secreto (acceso sin contraseña). Si hay una sucursal elegida,
+    // el link muestra SOLO esa sucursal (&s=). Sin token, cae al formato viejo.
     const url = token
-      ? `${origin}/preview/cliente?t=${token}`
+      ? `${origin}/preview/cliente?t=${token}${sucursal ? `&s=${sucursal}` : ''}`
       : `${origin}/preview/cliente?empresa=${slug}${sucursal ? `&sucursal=${sucursal}` : ''}`
     try {
       await navigator.clipboard.writeText(url)

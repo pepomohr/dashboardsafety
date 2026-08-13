@@ -36,6 +36,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
+      <head>
+        {/* Captura el evento de instalación de Android apenas carga, antes de que
+            React monte (si no, se pierde y el botón "Instalar" no hace nada). */}
+        <script dangerouslySetInnerHTML={{ __html: `
+          window.__ssInstall = null;
+          window.addEventListener('beforeinstallprompt', function (e) {
+            e.preventDefault();
+            window.__ssInstall = e;
+            window.dispatchEvent(new Event('ss-install-ready'));
+          });
+        ` }} />
+      </head>
       <body className={`${inter.variable} ${sora.variable} antialiased`}>
         {children}
       </body>

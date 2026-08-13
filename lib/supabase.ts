@@ -120,18 +120,20 @@ export async function getEmpresaById(id: string): Promise<any | null> {
  * Devuelve { empresa, documentos, accidentes } o null si el token no existe.
  * No requiere login: el token es la llave.
  */
-export async function datosCliente(token: string): Promise<{ empresa: any; documentos: DocRow[]; accidentes: AccRow[] } | null> {
+export async function datosCliente(token: string): Promise<{ empresa: any; sucursales: { id: string; name: string }[]; documentos: (DocRow & { sucursal_id: string | null })[]; accidentes: (AccRow & { sucursal_id: string | null })[] } | null> {
   if (!supabase) return null
   const { data, error } = await supabase.rpc('datos_cliente', { p_token: token })
   if (error || !data) { if (error) console.error('datosCliente:', error.message); return null }
   const d: any = data
   return {
     empresa: d.empresa,
+    sucursales: (d.sucursales || []) as { id: string; name: string }[],
     documentos: (d.documentos || []).map((x: any) => ({
       id: x.id, tipo: x.tipo, fecha_emision: x.fecha_emision,
       fecha_vencimiento: x.fecha_vencimiento, archivo_path: x.archivo ?? x.archivo_url ?? null, nota: x.nota,
+      sucursal_id: x.sucursal_id ?? null,
     })),
-    accidentes: (d.accidentes || []) as AccRow[],
+    accidentes: (d.accidentes || []).map((a: any) => ({ ...a, sucursal_id: a.sucursal_id ?? null })) as (AccRow & { sucursal_id: string | null })[],
   }
 }
 

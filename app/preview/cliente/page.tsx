@@ -108,15 +108,19 @@ export default function PreviewClienteDashboard() {
   useEffect(() => {
     if (!supabaseReady) { setCargando(false); return }
 
-    // 1) token del link, o el que quedó guardado de la última vez
-    const enUrl = new URLSearchParams(window.location.search).get('t')
+    // 1) token + sucursal del link, o los que quedaron guardados (app instalada)
+    const params = new URLSearchParams(window.location.search)
+    const enUrl = params.get('t')
+    const sucUrl = params.get('s')
     let token = enUrl
+    let suc = sucUrl
     try {
-      if (enUrl) localStorage.setItem('ss_token', enUrl)
-      else token = localStorage.getItem('ss_token')
+      if (enUrl) { localStorage.setItem('ss_token', enUrl); localStorage.setItem('ss_suc', sucUrl || '') }
+      else { token = localStorage.getItem('ss_token'); suc = localStorage.getItem('ss_suc') }
     } catch {}
     if (!token) { setSinAcceso(true); setCargando(false); return }
     const tk = token
+    const sucFiltro = suc || null
 
     let vivo = true
     async function traer(primera: boolean) {
@@ -126,10 +130,12 @@ export default function PreviewClienteDashboard() {
         if (primera) { setSinAcceso(true); setCargando(false) }
         return
       }
-      setEmpresaName(data.empresa.name)
+      // Si el link trae una sucursal, mostrar SOLO lo de esa sucursal
+      const sucNombre = sucFiltro ? data.sucursales.find(s => s.id === sucFiltro)?.name : null
+      setEmpresaName(sucNombre ? `${data.empresa.name} · ${sucNombre}` : data.empresa.name)
       setTrabajadores(data.empresa.trabajadores ?? null)
-      setDocs(data.documentos)
-      setAccs(data.accidentes)
+      setDocs(sucFiltro ? data.documentos.filter(d => d.sucursal_id === sucFiltro) : data.documentos)
+      setAccs(sucFiltro ? data.accidentes.filter(a => a.sucursal_id === sucFiltro) : data.accidentes)
       if (primera) setCargando(false)
     }
 

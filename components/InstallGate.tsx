@@ -16,6 +16,7 @@ export default function InstallGate({ children }: { children: ReactNode }) {
   const [iosNav, setIosNav] = useState<'safari' | 'chrome'>('safari')
   const [mostrar, setMostrar] = useState(false)
   const [guiaIOS, setGuiaIOS] = useState(false)
+  const [guiaAndroid, setGuiaAndroid] = useState(false)
   const [paso, setPaso] = useState(0)
 
   useEffect(() => {
@@ -34,10 +35,17 @@ export default function InstallGate({ children }: { children: ReactNode }) {
     // Mostrar la barrita solo en celu, sin instalar y si no la cerró antes
     if (isMobile && !standalone && !cerrado) setMostrar(true)
 
+    // Evento capturado temprano por el script del layout (Android)
+    if ((window as any).__ssInstall) setDeferred((window as any).__ssInstall)
+    const onReady = () => setDeferred((window as any).__ssInstall)
     const onPrompt = (e: Event) => { e.preventDefault(); setDeferred(e) }
+    window.addEventListener('ss-install-ready', onReady)
     window.addEventListener('beforeinstallprompt', onPrompt)
     window.addEventListener('appinstalled', () => setMostrar(false))
-    return () => window.removeEventListener('beforeinstallprompt', onPrompt)
+    return () => {
+      window.removeEventListener('ss-install-ready', onReady)
+      window.removeEventListener('beforeinstallprompt', onPrompt)
+    }
   }, [])
 
   async function instalar() {
@@ -49,6 +57,10 @@ export default function InstallGate({ children }: { children: ReactNode }) {
     } else if (isIOS) {
       setPaso(0)
       setGuiaIOS(true)
+    } else {
+      // Android sin evento disponible (ya lo mostró, o el navegador no lo ofrece):
+      // le explicamos cómo instalar desde el menú.
+      setGuiaAndroid(true)
     }
   }
 
@@ -78,6 +90,22 @@ export default function InstallGate({ children }: { children: ReactNode }) {
             <button onClick={cerrar} className="flex-shrink-0 p-1.5 rounded-lg hover:bg-gray-100" aria-label="Cerrar">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke={COLORS.gray} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Respaldo Android: cuando el navegador no ofrece el botón automático */}
+      {guiaAndroid && (
+        <div className="fixed inset-0 z-[95] flex items-end sm:items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setGuiaAndroid(false)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-5 text-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.png" alt="" className="w-12 h-12 mx-auto mb-3" />
+            <h3 className="text-lg font-extrabold mb-1" style={{ color: COLORS.grayDark }}>Instalá la app</h3>
+            <p className="text-sm mb-4" style={{ color: COLORS.gray }}>
+              Tocá el menú <b>⋮</b> arriba a la derecha del navegador y elegí <b>“Instalar app”</b> o <b>“Agregar a pantalla principal”</b>.
+            </p>
+            <button onClick={() => { setGuiaAndroid(false); cerrar() }} className="w-full py-2.5 rounded-xl text-white text-sm font-semibold" style={{ backgroundColor: COLORS.green }}>Entendido</button>
           </div>
         </div>
       )}

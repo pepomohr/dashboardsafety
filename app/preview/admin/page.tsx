@@ -29,6 +29,7 @@ import Sidebar, { NavItem } from '@/components/Sidebar'
 import Logo from '@/components/Logo'
 import EnviarAppButton from '@/components/EnviarAppButton'
 import { useDialogo } from '@/components/Dialogo'
+import DatePicker from '@/components/DatePicker'
 import { descargarComoPDF } from '@/lib/pdf'
 
 const COLOR_SWATCHES = ['#E2001A', '#1E9BD7', '#F57C00', '#2E7D32', '#7E57C2', '#EC407A', '#00897B', '#3D3D3D']
@@ -1051,10 +1052,10 @@ function CargaDocumentacion({
             </Field>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Fecha del estudio">
-                <input type="date" value={emision} max={venc || undefined} onChange={e => setEmision(e.target.value)} className="ss-input" style={{ color: COLORS.grayDark }} />
+                <DatePicker value={emision} max={venc || undefined} onChange={setEmision} />
               </Field>
               <Field label="Vence el *">
-                <input type="date" value={venc} min={emision || undefined} onChange={e => setVenc(e.target.value)} className="ss-input" style={{ color: COLORS.grayDark }} />
+                <DatePicker value={venc} min={emision || undefined} onChange={setVenc} />
               </Field>
             </div>
             <Field label="Observaciones (opcional)">
