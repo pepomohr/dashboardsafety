@@ -110,14 +110,12 @@ export default function InstallGate({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      {/* Guía iPhone: carrusel de 4 fotos reales (Safari o Chrome, según detección) */}
+      {/* Guía iPhone: carrusel de fotos reales (Safari o Chrome, según detección).
+          Cada navegador puede tener DISTINTA cantidad de pasos. */}
       {guiaIOS && (() => {
-        const pasos = [
-          { img: `/install/${iosNav}-1.jpg`, cap: 'Tocá el botón Compartir' },
-          { img: `/install/${iosNav}-2.jpg`, cap: 'Bajá y tocá “Agregar a inicio”' },
-          { img: `/install/${iosNav}-3.jpg`, cap: 'Tocá “Agregar” arriba a la derecha' },
-          { img: `/install/${iosNav}-4.jpg`, cap: '¡Listo! La app quedó en tu pantalla de inicio' },
-        ]
+        const CANT: Record<string, number> = { safari: 4, chrome: 5 } // ← cambiar acá si suben más/menos
+        const cant = CANT[iosNav] ?? 4
+        const pasos = Array.from({ length: cant }, (_, i) => ({ img: `/install/${iosNav}-${i + 1}.jpg` }))
         const ultimo = paso === pasos.length - 1
         return (
           <div className="fixed inset-0 z-[95] flex items-center justify-center p-4">
@@ -131,13 +129,13 @@ export default function InstallGate({ children }: { children: ReactNode }) {
               {/* Foto del paso */}
               <div className="flex-1 min-h-0 px-5 flex items-center justify-center overflow-hidden">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={pasos[paso].img} alt={pasos[paso].cap}
+                <img src={pasos[paso].img} alt={`Paso ${paso + 1}`}
                   className="max-w-full rounded-xl border border-gray-100"
                   style={{ maxHeight: '52vh', objectFit: 'contain' }}
                   onError={e => { e.currentTarget.src = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='320'%3E%3Crect width='100%25' height='100%25' fill='%23f2f4f1'/%3E%3Ctext x='50%25' y='50%25' font-size='72' text-anchor='middle' fill='%236FB63F' font-family='sans-serif' dy='.35em'%3E${paso + 1}%3C/text%3E%3C/svg%3E` }} />
               </div>
 
-              <p className="px-6 pt-3 text-center text-sm font-semibold" style={{ color: COLORS.grayDark }}>{pasos[paso].cap}</p>
+              <p className="px-6 pt-3 text-center text-sm font-semibold" style={{ color: COLORS.grayDark }}>Seguí el círculo rojo de la foto 👆</p>
 
               {/* Puntitos */}
               <div className="flex justify-center gap-1.5 py-3">
